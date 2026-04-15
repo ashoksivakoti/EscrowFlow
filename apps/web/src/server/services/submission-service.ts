@@ -76,6 +76,30 @@ export async function createMilestoneSubmissionForFreelancer(input: {
         },
       });
 
+      await tx.transactionLog.create({
+        data: {
+          chainId: 0,
+          blockNumber: 0n,
+          txHash: `offchain-submission-${submission.id}`,
+          logIndex: -1,
+          eventName: "MilestoneSubmissionCreated",
+          projectId: context.project.id,
+          milestoneId: context.milestone.id,
+          initiatedByUserId: input.freelancerUserId,
+          fromAddress: context.freelancer.walletAddress.toLowerCase(),
+          toAddress: null,
+          payload: {
+            submissionId: submission.id,
+            milestoneId: context.milestone.id,
+            note: input.payload.note ?? null,
+            externalLink: input.payload.externalLink ?? null,
+            metadataIpfsUri: metadataUpload.uri,
+            deliverableFiles,
+            source: "freelancer_submit",
+          },
+        },
+      });
+
       return submission;
     },
     prismaInteractiveTransactionOptions,

@@ -15,6 +15,9 @@ const { prismaMock, uploadFileToIpfsMock, uploadJsonToIpfsMock } = vi.hoisted(()
     submission: {
       create: vi.fn(),
     },
+    transactionLog: {
+      create: vi.fn(),
+    },
     $transaction: vi.fn(),
   },
   uploadFileToIpfsMock: vi.fn(),
@@ -43,6 +46,7 @@ describe("createMilestoneSubmissionForFreelancer", () => {
         return arg({
           submission: { create: prismaMock.submission.create },
           milestone: { update: prismaMock.milestone.update },
+          transactionLog: { create: prismaMock.transactionLog.create },
         });
       }
       return arg;

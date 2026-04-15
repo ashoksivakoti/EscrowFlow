@@ -369,7 +369,9 @@ export async function getProjectDetailForUser(
           milestoneId: true,
           status: true,
           summary: true,
+          deliverablesIpfsUri: true,
           submittedAt: true,
+          decidedAt: true,
           createdAt: true,
         },
       }),
@@ -452,12 +454,16 @@ export async function getProjectDetailForUser(
   if (row.clientUserId !== userId && row.freelancerUserId !== userId) {
     throw AppError.forbidden("You are not a participant in this project");
   }
+  const latestSubmission = latestSubmissionRaw
+    ? await mapLatestSubmissionWithMetadata(latestSubmissionRaw)
+    : null;
+
   return mapProjectDetail(
     row,
     {
       fundedAmountWei: fundedRows[0]?.funded ?? "0",
       releasedAmountWei: releasedRows[0]?.released ?? "0",
-      latestSubmission: latestSubmissionRaw ? mapSubmissionPreview(latestSubmissionRaw) : null,
+      latestSubmission,
       openDispute: openDisputeRaw ? mapDisputePreview(openDisputeRaw) : null,
       recentTransactions: recentTxRaw.map(mapProjectTransactionHistory),
     },
@@ -558,15 +564,35 @@ function mapSubmissionPreview(submission: {
   milestoneId: string;
   status: string;
   summary: string | null;
+  deliverablesIpfsUri: string;
   submittedAt: Date | null;
+  decidedAt: Date | null;
   createdAt: Date;
+}, metadata?: {
+  note?: string | null;
+  reviewNote?: string | null;
+  externalLink?: string | null;
+  metadataIpfsUri?: string | null;
+  deliverableFiles?: Array<{
+    cid: string;
+    uri: string;
+    fileName: string;
+    mimeType: string;
+    sizeBytes: number;
+  }>;
 }): ProjectSubmissionPreview {
   return {
     id: submission.id,
     milestoneId: submission.milestoneId,
     status: submission.status,
     summary: submission.summary,
+    note: metadata?.note ?? submission.summary,
+    reviewNote: metadata?.reviewNote ?? null,
+    metadataIpfsUri: metadata?.metadataIpfsUri ?? submission.deliverablesIpfsUri,
+    externalLink: metadata?.externalLink ?? null,
+    deliverableFiles: metadata?.deliverableFiles,
     submittedAt: submission.submittedAt?.toISOString() ?? null,
+    decidedAt: submission.decidedAt?.toISOString() ?? null,
     createdAt: submission.createdAt.toISOString(),
   };
 }
@@ -626,6 +652,86 @@ function mapProjectTransactionHistory(tx: {
     createdAt: tx.createdAt.toISOString(),
     blockTimestamp: typeof blockTimestamp === "string" ? blockTimestamp : null,
   };
+}
+
+async function mapLatestSubmissionWithMetadata(submission: {
+  id: string;
+  milestoneId: string;
+  status: string;
+  summary: string | null;
+  deliverablesIpfsUri: string;
+  submittedAt: Date | null;
+  decidedAt: Date | null;
+  createdAt: Date;
+}): Promise<ProjectSubmissionPreview> {
+  const logs = await prisma.transactionLog.findMany({
+    where: {
+      milestoneId: submission.milestoneId,
+      eventName: { in: ["MilestoneSubmissionCreated", "MilestoneApproved"] },
+    },
+    orderBy: { createdAt: "desc" },
+    take: 20,
+    select: { payload: true, eventName: true },
+  });
+
+  const submissionEvent = logs.find((log) => {
+    if (log.eventName !== "MilestoneSubmissionCreated") {
+      return false;
+    }
+    const payload =
+      log.payload && typeof log.payload === "object"
+        ? (log.payload as Record<string, unknown>)
+        : null;
+    return payload?.submissionId === submission.id;
+  });
+
+  const reviewEvent = logs.find((log) => {
+    if (log.eventName !== "MilestoneApproved") {
+      return false;
+    }
+    const payload =
+      log.payload && typeof log.payload === "object"
+        ? (log.payload as Record<string, unknown>)
+        : null;
+    return payload?.submissionId === submission.id;
+  });
+
+  const submissionPayload =
+    submissionEvent?.payload && typeof submissionEvent.payload === "object"
+      ? (submissionEvent.payload as Record<string, unknown>)
+      : {};
+  const reviewPayload =
+    reviewEvent?.payload && typeof reviewEvent.payload === "object"
+      ? (reviewEvent.payload as Record<string, unknown>)
+      : {};
+
+  const deliverableFilesRaw = Array.isArray(submissionPayload.deliverableFiles)
+    ? submissionPayload.deliverableFiles
+    : [];
+  const deliverableFiles = deliverableFilesRaw
+    .filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object"))
+    .map((item) => ({
+      cid: String(item.cid ?? ""),
+      uri: String(item.uri ?? ""),
+      fileName: String(item.fileName ?? "file"),
+      mimeType: String(item.mimeType ?? "application/octet-stream"),
+      sizeBytes: Number(item.sizeBytes ?? 0),
+    }))
+    .filter((item) => item.cid && item.uri);
+
+  return mapSubmissionPreview(submission, {
+    note: typeof submissionPayload.note === "string" ? submissionPayload.note : null,
+    reviewNote: typeof reviewPayload.reviewNote === "string" ? reviewPayload.reviewNote : null,
+    externalLink:
+      typeof submissionPayload.externalLink === "string"
+        ? submissionPayload.externalLink
+        : null,
+    metadataIpfsUri:
+      typeof submissionPayload.metadataIpfsUri === "string"
+        ? submissionPayload.metadataIpfsUri
+        : submission.deliverablesIpfsUri,
+    deliverableFiles,
+  });
 }
 
 function toUserPublicRef(user: {

@@ -8,13 +8,20 @@ import type {
 import type { ProjectStatus } from "../enums.js";
 import type { UserPublicRef } from "../profile.js";
 import type { MilestoneSummary } from "./milestone.js";
+import type { IpfsFileRef } from "../ipfs.js";
 
 export type ProjectSubmissionPreview = {
   id: EntityId;
   milestoneId: EntityId;
   status: string;
   summary: string | null;
+  note?: string | null;
+  reviewNote?: string | null;
+  metadataIpfsUri?: IpfsUri | null;
+  externalLink?: string | null;
+  deliverableFiles?: IpfsFileRef[];
   submittedAt: IsoDateTimeString | null;
+  decidedAt?: IsoDateTimeString | null;
   createdAt: IsoDateTimeString;
 };
 

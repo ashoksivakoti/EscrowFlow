@@ -4,6 +4,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect } from "react";
 
 import { AuthShell } from "@/components/layout/auth-shell";
+import { MilestoneApprovalPanel } from "@/components/projects/milestone-approval-panel";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
@@ -45,6 +46,7 @@ export default function ProjectDetailShellPage() {
       project.freelancer &&
       me.id === project.freelancer.id,
   );
+  const isProjectClient = Boolean(me?.roles.includes("CLIENT") && me?.id === project?.client.id);
 
   return (
     <AuthShell
@@ -202,6 +204,21 @@ export default function ProjectDetailShellPage() {
                         )}
                       </div>
                     ) : null}
+                    {isProjectClient &&
+                    project.latestSubmission &&
+                    project.latestSubmission.milestoneId === milestone.id &&
+                    canClientApprovePayout(project, milestone.status) ? (
+                      <MilestoneApprovalPanel
+                        projectId={project.id}
+                        milestoneId={milestone.id}
+                        milestoneIndex={milestone.sortOrder}
+                        submissionId={project.latestSubmission.id}
+                        chainId={project.chainId!}
+                        onChainProjectId={project.onChainProjectId!}
+                        escrowContractAddress={project.escrowContractAddress as `0x${string}`}
+                        releasedAmountWei={milestone.amountWei}
+                      />
+                    ) : null}
                   </div>
                 ))
               )}
@@ -227,11 +244,70 @@ export default function ProjectDetailShellPage() {
                   <p className="mt-2 break-words text-sm text-zinc-700 dark:text-zinc-300">
                     {project.latestSubmission.summary ?? "No submission summary text."}
                   </p>
+                  <p className="mt-2 break-words text-sm text-zinc-700 dark:text-zinc-300">
+                    Note: {project.latestSubmission.note ?? "No delivery note provided."}
+                  </p>
+                  {project.latestSubmission.externalLink ? (
+                    <p className="mt-2 text-xs text-zinc-600 dark:text-zinc-400">
+                      External link:{" "}
+                      <a
+                        href={project.latestSubmission.externalLink}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="break-all text-indigo-600 hover:underline dark:text-indigo-400"
+                      >
+                        {project.latestSubmission.externalLink}
+                      </a>
+                    </p>
+                  ) : null}
+                  {project.latestSubmission.metadataIpfsUri ? (
+                    <p className="mt-2 text-xs text-zinc-600 dark:text-zinc-400">
+                      Metadata:{" "}
+                      <a
+                        href={toGatewayUrl(project.latestSubmission.metadataIpfsUri)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="break-all text-indigo-600 hover:underline dark:text-indigo-400"
+                      >
+                        {project.latestSubmission.metadataIpfsUri}
+                      </a>
+                    </p>
+                  ) : null}
+                  {project.latestSubmission.deliverableFiles &&
+                  project.latestSubmission.deliverableFiles.length > 0 ? (
+                    <div className="mt-2 space-y-1">
+                      <p className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
+                        Deliverable files
+                      </p>
+                      {project.latestSubmission.deliverableFiles.map((file) => (
+                        <a
+                          key={`${file.cid}-${file.fileName}`}
+                          href={toGatewayUrl(file.uri)}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="block break-all text-xs text-indigo-600 hover:underline dark:text-indigo-400"
+                        >
+                          {file.fileName} ({formatFileSize(file.sizeBytes)})
+                        </a>
+                      ))}
+                    </div>
+                  ) : null}
+                  {project.latestSubmission.reviewNote ? (
+                    <p className="mt-2 break-words text-xs text-zinc-600 dark:text-zinc-400">
+                      Client review note: {project.latestSubmission.reviewNote}
+                    </p>
+                  ) : null}
                   <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
                     Submitted:{" "}
                     {project.latestSubmission.submittedAt
                       ? formatDateTime(project.latestSubmission.submittedAt)
                       : "Draft or unsent"}
+                  </p>
+                  <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                    Reviewed:{" "}
+                    {project.latestSubmission.decidedAt
+                      ? formatDateTime(project.latestSubmission.decidedAt)
+                      : "Not reviewed yet"}
                   </p>
                 </div>
               ) : (
@@ -386,4 +462,28 @@ function toGatewayUrl(uri: string): string {
 
 function canSubmitMilestone(status: string): boolean {
   return ["FUNDED", "IN_PROGRESS", "REJECTED"].includes(status);
+}
+
+function canClientApprovePayout(
+  project: {
+    chainId: number | null;
+    onChainProjectId: string | null;
+    escrowContractAddress: string | null;
+  },
+  milestoneStatus: string,
+): boolean {
+  if (!project.chainId || !project.onChainProjectId || !project.escrowContractAddress) {
+    return false;
+  }
+  return ["SUBMITTED", "CLIENT_REVIEW", "APPROVED"].includes(milestoneStatus);
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
+  if (bytes < 1024 * 1024) {
+    return `${(bytes / 1024).toFixed(1)} KB`;
+  }
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
