@@ -236,8 +236,11 @@ export async function buildFreelancerDashboard(
   const [
     activeProjectsRaw,
     deliveryMilestones,
+    pendingSubmissionsCount,
     underReviewMilestonesCount,
     openDisputes,
+    openDisputesCount,
+    releasedEarningsRaw,
     recentTxRaw,
     notificationsRaw,
     unreadNotificationsCount,
@@ -269,6 +272,12 @@ export async function buildFreelancerDashboard(
     prisma.milestone.count({
       where: {
         project: { freelancerUserId: userId },
+        status: { in: FREELANCER_DELIVERY_STATUSES },
+      },
+    }),
+    prisma.milestone.count({
+      where: {
+        project: { freelancerUserId: userId },
         status: { in: FREELANCER_UNDER_REVIEW_STATUSES },
       },
     }),
@@ -285,6 +294,26 @@ export async function buildFreelancerDashboard(
         milestone: { select: { projectId: true, project: { select: { title: true } } } },
       },
     }),
+    prisma.dispute.count({
+      where: {
+        status: { in: OPEN_DISPUTE_STATUSES },
+        milestone: { project: { freelancerUserId: userId } },
+      },
+    }),
+    prisma.$queryRaw<Array<{ total: string | null }>>(Prisma.sql`
+      SELECT COALESCE(SUM(
+        CASE
+          WHEN tl."eventName" = 'MilestoneFundsReleased'
+            THEN COALESCE(NULLIF(tl."payload"->>'amount', '')::numeric, 0)
+          WHEN tl."eventName" = 'DisputeResolved'
+            THEN COALESCE(NULLIF(tl."payload"->>'freelancerAmount', '')::numeric, 0)
+          ELSE 0
+        END
+      ), 0)::text AS total
+      FROM "transaction_logs" tl
+      INNER JOIN "projects" p ON p."id" = tl."projectId"
+      WHERE p."freelancerUserId" = ${userId}
+    `),
     prisma.transactionLog.findMany({
       where: {
         OR: [{ project: { freelancerUserId: userId } }, { initiatedByUserId: userId }],
@@ -324,6 +353,7 @@ export async function buildFreelancerDashboard(
   ]);
 
   const activeProjects = activeProjectsRaw.map(mapProjectSummary);
+  const releasedEarningsWei = releasedEarningsRaw[0]?.total ?? "0";
   const milestonesToDeliver: DashboardActionItem[] = deliveryMilestones.map((milestone) => ({
     kind: "MILESTONE_DELIVERY_DUE",
     title: `Deliver next milestone for ${milestone.project.title}`,
@@ -360,6 +390,10 @@ export async function buildFreelancerDashboard(
       unreadNotificationsCount,
       milestonesToDeliverCount: milestonesToDeliver.length,
       underReviewMilestonesCount,
+      pendingSubmissionsCount,
+      pendingReviewsCount: underReviewMilestonesCount,
+      openDisputesCount,
+      releasedEarningsWei,
     },
     activeProjects,
     milestonesToDeliver,
@@ -446,6 +480,12 @@ function mapRecentTransaction(tx: {
     payloadObject && "blockTimestamp" in payloadObject
       ? (payloadObject.blockTimestamp as unknown)
       : null;
+  const amountRaw =
+    payloadObject && "amount" in payloadObject
+      ? (payloadObject.amount as unknown)
+      : payloadObject && "freelancerAmount" in payloadObject
+        ? (payloadObject.freelancerAmount as unknown)
+        : null;
   return {
     txHash: tx.txHash,
     blockNumber: tx.blockNumber.toString(),
@@ -453,6 +493,7 @@ function mapRecentTransaction(tx: {
     eventName: tx.eventName,
     projectId: tx.projectId,
     milestoneId: tx.milestoneId,
+    amountWei: typeof amountRaw === "string" ? amountRaw : null,
     createdAt: tx.createdAt.toISOString(),
     blockTimestamp: typeof blockTimestampRaw === "string" ? blockTimestampRaw : null,
   };

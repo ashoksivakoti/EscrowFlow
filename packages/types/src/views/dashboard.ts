@@ -38,6 +38,7 @@ export type DashboardRecentTransaction = {
   eventName: string;
   projectId: EntityId | null;
   milestoneId: EntityId | null;
+  amountWei?: string | null;
   createdAt: IsoDateTimeString;
   blockTimestamp: IsoDateTimeString | null;
 };
@@ -66,6 +67,10 @@ export type FreelancerDashboard = {
   summary: DashboardSummaryMetrics & {
     milestonesToDeliverCount: number;
     underReviewMilestonesCount: number;
+    pendingSubmissionsCount: number;
+    pendingReviewsCount: number;
+    openDisputesCount: number;
+    releasedEarningsWei: string;
   };
   activeProjects: ProjectSummary[];
   milestonesToDeliver: DashboardActionItem[];
