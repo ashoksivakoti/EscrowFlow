@@ -11,6 +11,7 @@ import type { ProjectDetail, ProjectSummary } from "../views/project.js";
 
 export type ListProjectsQuery = CursorPageQuery &
   ListSortQuery & {
+    query?: string;
     status?: ProjectStatus | ProjectStatus[];
     /** Projects where caller is client, freelancer, or either. */
     participation?: "client" | "freelancer" | "any";

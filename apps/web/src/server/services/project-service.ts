@@ -1,7 +1,10 @@
 import { PlatformRole, ProjectStatus } from "@prisma/client";
 import { getAddress } from "viem";
 
-import type { CreateProjectBody } from "@/server/validation/schemas/projects";
+import type {
+  CreateProjectBody,
+  ListProjectsQuery as ListProjectsInput,
+} from "@/server/validation/schemas/projects";
 import type {
   CreateProjectResponse,
   ListProjectsResponse,
@@ -228,23 +231,77 @@ function mapProjectDetail(project: {
   };
 }
 
-export async function listProjectsForUser(userId: string): Promise<ListProjectsResponse> {
+export async function listProjectsForUser(
+  userId: string,
+  query: ListProjectsInput,
+): Promise<ListProjectsResponse> {
+  const take = query.limit ?? 24;
+  const participation = query.participation ?? "any";
+  const sortBy = query.sortBy ?? "updatedAt";
+  const sortOrder = query.sortOrder ?? "desc";
+
+  const where =
+    participation === "client"
+      ? {
+          clientUserId: userId,
+        }
+      : participation === "freelancer"
+        ? {
+            freelancerUserId: userId,
+          }
+        : {
+            OR: [{ clientUserId: userId }, { freelancerUserId: userId }],
+          };
+
   const rows = await prisma.project.findMany({
     where: {
-      OR: [{ clientUserId: userId }, { freelancerUserId: userId }],
+      ...where,
+      ...(query.status ? { status: { in: query.status } } : {}),
+      ...(query.query
+        ? {
+            OR: [
+              { title: { contains: query.query, mode: "insensitive" } },
+              { description: { contains: query.query, mode: "insensitive" } },
+              {
+                client: {
+                  walletAddress: { contains: query.query.toLowerCase(), mode: "insensitive" },
+                },
+              },
+              {
+                freelancer: {
+                  walletAddress: { contains: query.query.toLowerCase(), mode: "insensitive" },
+                },
+              },
+            ],
+          }
+        : {}),
     },
     include: {
       client: { include: { profile: true } },
       freelancer: { include: { profile: true } },
-      milestones: { orderBy: { sortOrder: "asc" } },
+      milestones: {
+        select: { status: true, dueAt: true },
+      },
       _count: { select: { milestones: true } },
     },
-    orderBy: { updatedAt: "desc" },
-    take: 50,
+    orderBy:
+      sortBy === "createdAt" || sortBy === "updatedAt"
+        ? { [sortBy]: sortOrder }
+        : { updatedAt: "desc" },
+    take,
   });
 
+  const sortedRows =
+    sortBy === "amountWei"
+      ? [...rows].sort((a, b) => compareWei(a.totalValueWei, b.totalValueWei, sortOrder))
+      : sortBy === "deadline"
+        ? [...rows].sort((a, b) =>
+            compareDeadline(computeNextDueAt(a.milestones), computeNextDueAt(b.milestones), sortOrder),
+          )
+        : rows;
+
   return {
-    items: rows.map((row) => mapProjectSummary(row)),
+    items: sortedRows.map((row) => mapProjectSummary(row)),
     nextCursor: null,
     hasMore: false,
   };
@@ -292,8 +349,16 @@ function mapProjectSummary(project: {
     walletAddress: string;
     profile: { displayName: string; avatarUrl: string | null } | null;
   } | null;
+  milestones: Array<{
+    status: string;
+    dueAt: Date | null;
+  }>;
   _count: { milestones: number };
 }): ProjectSummary {
+  const nextMilestoneDueAt = computeNextDueAt(project.milestones);
+  const milestonesReleasedCount = project.milestones.filter(
+    (m) => m.status === "RELEASED",
+  ).length;
   return {
     id: project.id,
     status: project.status,
@@ -307,9 +372,49 @@ function mapProjectSummary(project: {
     freelancer: project.freelancer ? toUserPublicRef(project.freelancer) : null,
     agreementIpfsUri: project.agreementIpfsUri,
     milestoneCount: project._count.milestones,
+    milestonesReleasedCount,
+    nextMilestoneDueAt: nextMilestoneDueAt?.toISOString() ?? null,
     openDisputeCount: 0,
     updatedAt: project.updatedAt.toISOString(),
   };
+}
+
+function computeNextDueAt(
+  milestones: Array<{ dueAt: Date | null }>,
+): Date | null {
+  const dueDates = milestones
+    .map((m) => m.dueAt)
+    .filter((value): value is Date => Boolean(value))
+    .sort((a, b) => a.getTime() - b.getTime());
+  return dueDates[0] ?? null;
+}
+
+function compareWei(
+  left: string | null,
+  right: string | null,
+  order: "asc" | "desc",
+): number {
+  const l = left ? BigInt(left) : 0n;
+  const r = right ? BigInt(right) : 0n;
+  if (l === r) {
+    return 0;
+  }
+  const base = l > r ? 1 : -1;
+  return order === "asc" ? base : -base;
+}
+
+function compareDeadline(
+  left: Date | null,
+  right: Date | null,
+  order: "asc" | "desc",
+): number {
+  const l = left?.getTime() ?? Number.POSITIVE_INFINITY;
+  const r = right?.getTime() ?? Number.POSITIVE_INFINITY;
+  if (l === r) {
+    return 0;
+  }
+  const base = l > r ? 1 : -1;
+  return order === "asc" ? base : -base;
 }
 
 function toUserPublicRef(user: {

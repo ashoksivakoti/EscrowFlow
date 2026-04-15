@@ -22,6 +22,8 @@ export type ProjectSummary = {
   freelancer: UserPublicRef | null;
   agreementIpfsUri: IpfsUri | null;
   milestoneCount: number;
+  milestonesReleasedCount?: number;
+  nextMilestoneDueAt?: IsoDateTimeString | null;
   openDisputeCount: number;
   updatedAt: IsoDateTimeString;
 };

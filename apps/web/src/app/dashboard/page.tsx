@@ -112,6 +112,13 @@ export default function DashboardPage() {
               </CardDescription>
             </CardHeader>
             <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => router.push("/projects")}
+              >
+                Browse projects
+              </Button>
               <Button type="button" onClick={() => router.push("/projects/new")}>
                 Create new project
               </Button>
