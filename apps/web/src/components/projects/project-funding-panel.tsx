@@ -1,0 +1,418 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { erc20Abi, formatUnits, parseUnits } from "viem";
+import {
+  useAccount,
+  useChainId,
+  usePublicClient,
+  useSwitchChain,
+  useWalletClient,
+} from "wagmi";
+
+import { escrowRegistryAbi } from "@/lib/contracts/escrow-registry-abi";
+import { Button } from "@/components/ui/button";
+import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { FieldError } from "@/components/ui/field-error";
+import { Input } from "@/components/ui/input";
+
+type FundingPanelProps = {
+  projectId: string;
+  chainId: number;
+  escrowContractAddress: `0x${string}`;
+  tokenAddress: `0x${string}`;
+  onChainProjectId: string;
+  totalValueWei: string;
+  projectTitle: string;
+};
+
+type FundingPhase =
+  | "idle"
+  | "approve_signing"
+  | "approve_pending"
+  | "approve_success"
+  | "fund_signing"
+  | "fund_pending"
+  | "fund_success"
+  | "failure";
+
+type OnChainFundingState = {
+  decimals: number;
+  fundedWei: bigint;
+  totalWei: bigint;
+  allowanceWei: bigint;
+  balanceWei: bigint;
+};
+
+function clampPositiveDecimal(input: string): string {
+  return input.trim();
+}
+
+export function ProjectFundingPanel(props: FundingPanelProps) {
+  const queryClient = useQueryClient();
+  const chainId = useChainId();
+  const { address } = useAccount();
+  const publicClient = usePublicClient({ chainId: props.chainId });
+  const { data: walletClient } = useWalletClient({ chainId: props.chainId });
+  const { switchChainAsync } = useSwitchChain();
+
+  const [phase, setPhase] = useState<FundingPhase>("idle");
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [amountInput, setAmountInput] = useState("");
+  const [onChain, setOnChain] = useState<OnChainFundingState | null>(null);
+
+  const chainMismatch = chainId !== props.chainId;
+  const onChainProjectId = BigInt(props.onChainProjectId);
+
+  async function refreshOnChainState(): Promise<void> {
+    if (!publicClient || !address) {
+      return;
+    }
+    const [projectTuple, decimals, allowance, balance] = await Promise.all([
+      publicClient.readContract({
+        address: props.escrowContractAddress,
+        abi: escrowRegistryAbi,
+        functionName: "getProject",
+        args: [onChainProjectId],
+      }),
+      publicClient.readContract({
+        address: props.tokenAddress,
+        abi: erc20Abi,
+        functionName: "decimals",
+      }),
+      publicClient.readContract({
+        address: props.tokenAddress,
+        abi: erc20Abi,
+        functionName: "allowance",
+        args: [address, props.escrowContractAddress],
+      }),
+      publicClient.readContract({
+        address: props.tokenAddress,
+        abi: erc20Abi,
+        functionName: "balanceOf",
+        args: [address],
+      }),
+    ]);
+
+    const totalWei = BigInt(projectTuple.totalAmount);
+    const fundedWei = BigInt(projectTuple.fundedAmount);
+
+    setOnChain({
+      decimals: Number(decimals),
+      totalWei,
+      fundedWei,
+      allowanceWei: BigInt(allowance),
+      balanceWei: BigInt(balance),
+    });
+  }
+
+  useEffect(() => {
+    void refreshOnChainState();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [address, props.chainId, props.escrowContractAddress, props.tokenAddress, props.onChainProjectId]);
+
+  const derived = useMemo(() => {
+    if (!onChain) {
+      return {
+        remainingWei: 0n,
+        amountWei: 0n,
+        allowanceEnough: false,
+        parseError: "Loading on-chain funding state…",
+      };
+    }
+    const remainingWei =
+      onChain.totalWei > onChain.fundedWei ? onChain.totalWei - onChain.fundedWei : 0n;
+    const normalized = clampPositiveDecimal(amountInput);
+    if (!normalized) {
+      return {
+        remainingWei,
+        amountWei: 0n,
+        allowanceEnough: false,
+        parseError: null,
+      };
+    }
+    try {
+      const amountWei = parseUnits(normalized, onChain.decimals);
+      const allowanceEnough = onChain.allowanceWei >= amountWei;
+      return { remainingWei, amountWei, allowanceEnough, parseError: null };
+    } catch {
+      return {
+        remainingWei,
+        amountWei: 0n,
+        allowanceEnough: false,
+        parseError: "Enter a valid number for token amount",
+      };
+    }
+  }, [amountInput, onChain]);
+
+  const isBusy =
+    phase === "approve_signing" ||
+    phase === "approve_pending" ||
+    phase === "fund_signing" ||
+    phase === "fund_pending";
+
+  async function ensureAllowanceAndFund(): Promise<void> {
+    setErrorMessage(null);
+    setSuccessMessage(null);
+    if (!onChain || !walletClient || !publicClient || !address) {
+      setErrorMessage("Wallet is not ready yet. Try reconnecting.");
+      return;
+    }
+    if (chainMismatch) {
+      setErrorMessage(`Switch your wallet network to chain ${props.chainId} first.`);
+      return;
+    }
+    if (derived.parseError) {
+      setErrorMessage(derived.parseError);
+      return;
+    }
+    if (derived.amountWei <= 0n) {
+      setErrorMessage("Enter an amount greater than zero.");
+      return;
+    }
+    if (derived.amountWei > derived.remainingWei) {
+      setErrorMessage("Amount exceeds remaining project funding.");
+      return;
+    }
+    if (derived.amountWei > onChain.balanceWei) {
+      setErrorMessage("Your token balance is lower than this funding amount.");
+      return;
+    }
+
+    try {
+      if (!derived.allowanceEnough) {
+        setPhase("approve_signing");
+        const approveHash = await walletClient.writeContract({
+          address: props.tokenAddress,
+          abi: erc20Abi,
+          functionName: "approve",
+          args: [props.escrowContractAddress, derived.amountWei],
+          chain: walletClient.chain,
+          account: walletClient.account,
+        });
+        setPhase("approve_pending");
+        await publicClient.waitForTransactionReceipt({ hash: approveHash });
+        setPhase("approve_success");
+      }
+
+      setPhase("fund_signing");
+      const fundHash = await walletClient.writeContract({
+        address: props.escrowContractAddress,
+        abi: escrowRegistryAbi,
+        functionName: "fundProject",
+        args: [onChainProjectId, derived.amountWei],
+        chain: walletClient.chain,
+        account: walletClient.account,
+      });
+      setPhase("fund_pending");
+      await publicClient.waitForTransactionReceipt({ hash: fundHash });
+      const fundedSnapshot = await publicClient.readContract({
+        address: props.escrowContractAddress,
+        abi: escrowRegistryAbi,
+        functionName: "getProject",
+        args: [onChainProjectId],
+      });
+      const fundedAfter = BigInt(fundedSnapshot.fundedAmount);
+
+      const reconcileRes = await fetch(`/api/v1/projects/${props.projectId}/funding`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          txHash: fundHash,
+          chainId: props.chainId,
+          fundedAmountWei: fundedAfter.toString(),
+          escrowContractAddress: props.escrowContractAddress,
+          onChainProjectId: props.onChainProjectId,
+        }),
+      });
+      if (!reconcileRes.ok) {
+        throw new Error("Funding confirmed, but app sync failed. Please refresh.");
+      }
+
+      await queryClient.invalidateQueries({ queryKey: ["project", props.projectId] });
+      await queryClient.invalidateQueries({ queryKey: ["projects"] });
+      setPhase("fund_success");
+      setSuccessMessage("Funding confirmed on-chain and synced in app state.");
+      setAmountInput("");
+      await refreshOnChainState();
+    } catch (error) {
+      setPhase("failure");
+      setErrorMessage(
+        error instanceof Error ? error.message : "Funding transaction failed",
+      );
+    }
+  }
+
+  const statusMessage = (() => {
+    if (phase === "approve_signing") {
+      return "Waiting for wallet signature for token approval…";
+    }
+    if (phase === "approve_pending") {
+      return "Token approval transaction submitted. Waiting for confirmation…";
+    }
+    if (phase === "approve_success") {
+      return "Token approval confirmed.";
+    }
+    if (phase === "fund_signing") {
+      return "Waiting for wallet signature for project funding…";
+    }
+    if (phase === "fund_pending") {
+      return "Funding transaction submitted. Waiting for confirmation…";
+    }
+    if (phase === "fund_success") {
+      return successMessage ?? "Funding successful.";
+    }
+    if (phase === "failure") {
+      return errorMessage ?? "Funding failed.";
+    }
+    return null;
+  })();
+
+  return (
+    <Card className="w-full max-w-full overflow-hidden">
+      <CardHeader>
+        <CardTitle>Fund escrow project</CardTitle>
+        <CardDescription>
+          Approve token spending once, then fund this project escrow with a clear
+          on-chain transaction trail.
+        </CardDescription>
+      </CardHeader>
+
+      <div className="flex flex-col gap-5">
+        <div className="rounded-xl border border-zinc-200 bg-zinc-50/70 p-4 dark:border-zinc-800 dark:bg-zinc-900/60">
+          <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+            {props.projectTitle}
+          </p>
+          <div className="mt-3 grid grid-cols-1 gap-2 text-sm text-zinc-700 dark:text-zinc-300 sm:grid-cols-2">
+            <p>
+              <span className="font-medium">Chain:</span> {props.chainId}
+            </p>
+            <p>
+              <span className="font-medium">On-chain project id:</span>{" "}
+              {props.onChainProjectId}
+            </p>
+            <p className="break-all">
+              <span className="font-medium">Escrow contract:</span>{" "}
+              {props.escrowContractAddress}
+            </p>
+            <p className="break-all">
+              <span className="font-medium">Token:</span> {props.tokenAddress}
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <InfoMetric
+            label="Target amount"
+            value={
+              onChain
+                ? `${formatUnits(onChain.totalWei, onChain.decimals)} tokens`
+                : `${props.totalValueWei} (smallest units)`
+            }
+          />
+          <InfoMetric
+            label="Funded amount"
+            value={
+              onChain
+                ? `${formatUnits(onChain.fundedWei, onChain.decimals)} tokens`
+                : "Loading…"
+            }
+          />
+          <InfoMetric
+            label="Remaining amount"
+            value={
+              onChain
+                ? `${formatUnits(
+                    onChain.totalWei > onChain.fundedWei
+                      ? onChain.totalWei - onChain.fundedWei
+                      : 0n,
+                    onChain.decimals,
+                  )} tokens`
+                : "Loading…"
+            }
+          />
+        </div>
+
+        {chainMismatch ? (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300">
+            <p>Wallet network mismatch. Switch to chain {props.chainId} to continue.</p>
+            <Button
+              type="button"
+              variant="secondary"
+              className="mt-3"
+              onClick={() => {
+                void switchChainAsync({ chainId: props.chainId });
+              }}
+            >
+              Switch network
+            </Button>
+          </div>
+        ) : null}
+
+        <div className="space-y-2">
+          <label
+            htmlFor="fund-amount"
+            className="text-sm font-medium text-zinc-700 dark:text-zinc-300"
+          >
+            Funding amount (human token units)
+          </label>
+          <Input
+            id="fund-amount"
+            placeholder="e.g. 1500.25"
+            inputMode="decimal"
+            value={amountInput}
+            onChange={(e) => setAmountInput(e.target.value)}
+            disabled={isBusy}
+          />
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+            Enter the amount in normal token units. We convert decimals correctly
+            before sending to chain.
+          </p>
+        </div>
+
+        {statusMessage ? (
+          <div
+            className={`rounded-xl border px-4 py-3 text-sm ${
+              phase === "failure"
+                ? "border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300"
+                : "border-indigo-200 bg-indigo-50 text-indigo-800 dark:border-indigo-900 dark:bg-indigo-950/40 dark:text-indigo-300"
+            }`}
+            role="status"
+          >
+            {statusMessage}
+          </div>
+        ) : null}
+
+        <FieldError message={errorMessage ?? undefined} />
+
+        <Button
+          type="button"
+          disabled={isBusy || !onChain}
+          onClick={() => {
+            void ensureAllowanceAndFund();
+          }}
+        >
+          {isBusy
+            ? "Processing…"
+            : derived.allowanceEnough
+              ? "Fund project"
+              : "Approve token and fund"}
+        </Button>
+      </div>
+    </Card>
+  );
+}
+
+function InfoMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-zinc-200 bg-white px-4 py-3 dark:border-zinc-800 dark:bg-zinc-950">
+      <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+        {label}
+      </p>
+      <p className="mt-1 text-sm font-semibold text-zinc-900 dark:text-zinc-100">{value}</p>
+    </div>
+  );
+}

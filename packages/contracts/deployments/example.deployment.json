@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "network": "sepolia",
+  "chainId": 11155111,
+  "deployedAt": "2026-04-12T00:00:00.000Z",
+  "deployer": "0x0000000000000000000000000000000000000000",
+  "contracts": {
+    "MockERC20Stablecoin": "0x0000000000000000000000000000000000000000",
+    "EscrowFlowRegistry": "0x0000000000000000000000000000000000000000"
+  },
+  "roles": {
+    "defaultAdmin": "0x0000000000000000000000000000000000000000",
+    "pauser": "0x0000000000000000000000000000000000000000",
+    "arbitratorGranted": "0x0000000000000000000000000000000000000000"
+  },
+  "notes": "Example shape only — not real addresses."
+}

@@ -1,0 +1,26 @@
+{
+  "name": "@escrowflow/contracts",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "deploy:mock-token": "hardhat run scripts/deploy-mock-token.ts",
+    "deploy:registry": "hardhat run scripts/deploy-registry.ts",
+    "deploy:stack": "hardhat run scripts/deploy-stack.ts",
+    "lint": "node -e \"console.log('Solidity linting not configured yet (add solhint when needed).')\"",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "@openzeppelin/contracts": "^5.1.0",
+    "@types/chai": "^4.3.20",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^22.10.0",
+    "chai": "^4.5.0",
+    "dotenv": "^17.4.1",
+    "ethers": "^6.13.0",
+    "hardhat": "^2.22.17",
+    "typescript": "^5.7.3"
+  }
+}

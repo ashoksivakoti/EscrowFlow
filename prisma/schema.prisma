@@ -1,0 +1,448 @@
+// EscrowFlow — database schema (see docs/domain-model.md for lifecycle rules)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// -----------------------------------------------------------------------------
+// Enums
+// -----------------------------------------------------------------------------
+
+/// Platform-level capabilities. A user may hold multiple roles (e.g. CLIENT + FREELANCER).
+enum PlatformRole {
+  ADMIN
+  CLIENT
+  FREELANCER
+}
+
+enum ProjectStatus {
+  DRAFT
+  AWAITING_FREELANCER
+  AWAITING_ESCROW
+  ACTIVE
+  ON_HOLD
+  COMPLETED
+  CANCELLED
+  DISPUTED
+}
+
+enum MilestoneStatus {
+  PLANNED
+  AWAITING_FUNDS
+  FUNDED
+  IN_PROGRESS
+  SUBMITTED
+  CLIENT_REVIEW
+  APPROVED
+  REJECTED
+  DISPUTED
+  RELEASED
+  VOIDED
+}
+
+enum SubmissionStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  ACCEPTED
+  REJECTED
+  SUPERSEDED
+}
+
+enum DisputeStatus {
+  OPEN
+  AWAITING_RESPONSE
+  UNDER_ADMIN_REVIEW
+  RESOLVED_CLIENT_FAVOR
+  RESOLVED_FREELANCER_FAVOR
+  RESOLVED_SPLIT
+  DISMISSED
+  WITHDRAWN
+}
+
+enum NotificationType {
+  SYSTEM
+  PROJECT
+  MILESTONE
+  SUBMISSION
+  DISPUTE
+  PAYMENT
+  REVIEW
+  MODERATION
+}
+
+// -----------------------------------------------------------------------------
+// Auth (SIWE nonces — single-use, short-lived)
+// -----------------------------------------------------------------------------
+
+model SiweNonce {
+  id        String    @id @default(cuid())
+  nonce     String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([expiresAt])
+  @@map("siwe_nonces")
+}
+
+// -----------------------------------------------------------------------------
+// Identity & profile
+// -----------------------------------------------------------------------------
+
+model User {
+  id            String    @id @default(cuid())
+  /// Checksummed or normalized lowercase address; enforce one style in application code.
+  walletAddress String    @unique
+  lastLoginAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  profile Profile?
+
+  platformRoles UserPlatformRole[]
+
+  projectsAsClient     Project[] @relation("ProjectClient")
+  projectsAsFreelancer Project[] @relation("ProjectFreelancer")
+
+  submissions Submission[] @relation("SubmissionAuthor")
+
+  disputesOpened   Dispute[] @relation("DisputeOpener")
+  disputesResolved Dispute[] @relation("DisputeResolver")
+
+  rolesAssigned UserPlatformRole[] @relation("RoleAssigner")
+
+  notifications Notification[]
+
+  reviewsAuthored Review[] @relation("ReviewAuthor")
+  reviewsReceived Review[] @relation("ReviewSubject")
+
+  transactionLogs TransactionLog[] @relation("TxInitiator")
+
+  @@index([createdAt])
+  @@map("users")
+}
+
+model Profile {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  displayName     String
+  bio             String?   @db.Text
+  avatarUrl       String?
+  timezone        String?
+  /// Optional off-chain contact for notifications; not used for wallet authentication.
+  email           String?
+  emailVerifiedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("profiles")
+}
+
+model UserPlatformRole {
+  id String @id @default(cuid())
+
+  userId String
+  user   User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role   PlatformRole
+
+  assignedAt       DateTime @default(now())
+  assignedByUserId String?
+  assignedBy       User?    @relation("RoleAssigner", fields: [assignedByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, role])
+  @@index([role])
+  @@map("user_platform_roles")
+}
+
+// -----------------------------------------------------------------------------
+// Project & work units
+// -----------------------------------------------------------------------------
+
+model Project {
+  id String @id @default(cuid())
+
+  clientUserId String
+  client       User   @relation("ProjectClient", fields: [clientUserId], references: [id], onDelete: Restrict)
+
+  freelancerUserId String?
+  freelancer       User?   @relation("ProjectFreelancer", fields: [freelancerUserId], references: [id], onDelete: SetNull)
+
+  status      ProjectStatus @default(DRAFT)
+  title       String
+  description String?       @db.Text
+
+  /// Canonical agreement artifact (scope, terms pointer, etc.) — prefer `ipfs://` URIs.
+  agreementIpfsUri String? @db.Text
+
+  /// Target chain for escrow (EIP-155 chain id).
+  chainId Int?
+
+  /// Escrow / project contract address (checksummed or normalized consistently in app).
+  escrowContractAddress String?
+  /// On-chain project / escrow identifier as decimal string (uint256-safe).
+  onChainProjectId      String?
+  /// ERC20 used for milestone funding (contract address).
+  paymentTokenAddress   String?
+
+  /// Denormalized sum of milestone amounts in token smallest units (decimal string).
+  totalValueWei String?
+
+  completedAt DateTime?
+  cancelledAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  milestones      Milestone[]
+  transactionLogs TransactionLog[]
+  notifications   Notification[]
+  reviews         Review[]
+
+  @@index([clientUserId, status])
+  @@index([freelancerUserId, status])
+  @@index([status, updatedAt])
+  @@index([chainId, escrowContractAddress])
+  @@map("projects")
+}
+
+model Milestone {
+  id String @id @default(cuid())
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  sortOrder   Int
+  title       String
+  description String? @db.Text
+
+  /// Amount in token smallest units (decimal string) for this milestone payout.
+  amountWei String
+
+  status MilestoneStatus @default(PLANNED)
+  dueAt  DateTime?
+
+  /// Optional milestone-specific specification or acceptance criteria on IPFS.
+  specificationIpfsUri String? @db.Text
+
+  fundedAt   DateTime?
+  releasedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  submissions     Submission[]
+  disputes        Dispute[]
+  transactionLogs TransactionLog[]
+  notifications   Notification[]
+
+  @@unique([projectId, sortOrder])
+  @@index([projectId, status])
+  @@index([status, dueAt])
+  @@map("milestones")
+}
+
+model Submission {
+  id String @id @default(cuid())
+
+  milestoneId String
+  milestone   Milestone @relation(fields: [milestoneId], references: [id], onDelete: Cascade)
+
+  submittedByUserId String
+  submittedBy       User   @relation("SubmissionAuthor", fields: [submittedByUserId], references: [id], onDelete: Restrict)
+
+  status SubmissionStatus @default(DRAFT)
+
+  /// Deliverable bundle / manifest on IPFS (files, hashes, notes index).
+  deliverablesIpfsUri String  @db.Text
+  summary             String? @db.Text
+
+  /// Monotonic per milestone (set in application layer when creating a new attempt).
+  attemptNumber Int @default(1)
+
+  submittedAt DateTime?
+  decidedAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  disputes Dispute[]
+
+  @@unique([milestoneId, attemptNumber])
+  @@index([milestoneId, status])
+  @@index([milestoneId, createdAt])
+  @@index([submittedByUserId])
+  @@map("submissions")
+}
+
+model Dispute {
+  id String @id @default(cuid())
+
+  milestoneId String
+  milestone   Milestone @relation(fields: [milestoneId], references: [id], onDelete: Cascade)
+
+  /// Optional link to the submission under dispute.
+  relatedSubmissionId String?
+  relatedSubmission   Submission? @relation(fields: [relatedSubmissionId], references: [id], onDelete: SetNull)
+
+  openedByUserId String
+  openedBy       User   @relation("DisputeOpener", fields: [openedByUserId], references: [id], onDelete: Restrict)
+
+  status DisputeStatus @default(OPEN)
+
+  title       String?
+  description String  @db.Text
+
+  /// Evidence package (files, statements) on IPFS.
+  evidenceIpfsUri String @db.Text
+
+  /// Internal arbitrator notes — expose only to admins in application code.
+  internalNotes String? @db.Text
+
+  resolvedByUserId String?
+  resolvedBy       User?     @relation("DisputeResolver", fields: [resolvedByUserId], references: [id], onDelete: SetNull)
+  resolvedAt       DateTime?
+
+  /// Optional on-chain resolution transaction hash for audit trail.
+  resolutionTxHash String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([milestoneId, status])
+  @@index([status, createdAt])
+  @@index([openedByUserId])
+  @@map("disputes")
+}
+
+// -----------------------------------------------------------------------------
+// Chain mirror, notifications, reviews, sync
+// -----------------------------------------------------------------------------
+
+model TransactionLog {
+  id String @id @default(cuid())
+
+  chainId     Int
+  blockNumber BigInt
+  txHash      String
+  /// Use -1 when the row represents the whole transaction rather than a specific log index.
+  logIndex    Int    @default(-1)
+
+  /// High-level name, e.g. `Deposited`, `Released`, `DisputeOpened` (align with contracts/events).
+  eventName String
+
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  milestoneId String?
+  milestone   Milestone? @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
+
+  initiatedByUserId String?
+  initiatedBy       User?   @relation("TxInitiator", fields: [initiatedByUserId], references: [id], onDelete: SetNull)
+
+  fromAddress String?
+  toAddress   String?
+
+  /// Raw decoded args, topics, or auxiliary metadata for auditors and reprocessing.
+  payload Json @db.JsonB
+
+  createdAt DateTime @default(now())
+
+  @@unique([chainId, txHash, logIndex])
+  @@index([chainId, blockNumber])
+  @@index([projectId, createdAt])
+  @@index([milestoneId, createdAt])
+  @@index([initiatedByUserId])
+  @@map("transaction_logs")
+}
+
+model Notification {
+  id String @id @default(cuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type NotificationType
+
+  title String
+  body  String @db.Text
+  data  Json?  @db.JsonB
+
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  milestoneId String?
+  milestone   Milestone? @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
+
+  readAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, readAt])
+  @@index([userId, createdAt])
+  @@index([type, createdAt])
+  @@map("notifications")
+}
+
+model Review {
+  id String @id @default(cuid())
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  authorUserId String
+  author       User   @relation("ReviewAuthor", fields: [authorUserId], references: [id], onDelete: Cascade)
+
+  subjectUserId String
+  subject       User   @relation("ReviewSubject", fields: [subjectUserId], references: [id], onDelete: Cascade)
+
+  /// 1–5 inclusive; enforce in application validation.
+  rating Int
+
+  headline String?
+  body     String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([projectId, authorUserId, subjectUserId])
+  @@index([subjectUserId, createdAt])
+  @@index([projectId])
+  @@map("reviews")
+}
+
+/// Cursor for idempotent blockchain event ingestion (per chain + logical scope).
+model EventSyncCheckpoint {
+  id String @id @default(cuid())
+
+  chainId Int
+  /// e.g. escrow contract address, factory address, or a named scope like `ESCROW_V1`.
+  scope   String
+
+  lastProcessedBlock     BigInt
+  lastProcessedBlockHash String?
+
+  /// Optional fine-grained cursor within a block (log index); null means block-level cursor only.
+  lastProcessedLogIndex Int?
+
+  /// Free-form JSON for indexer-specific state (rewind markers, filters version, etc.).
+  cursorState Json? @db.JsonB
+
+  lastError     String?   @db.Text
+  lastSuccessAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([chainId, scope])
+  @@index([chainId, updatedAt])
+  @@map("event_sync_checkpoints")
+}
