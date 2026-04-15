@@ -1,4 +1,4 @@
-import { PlatformRole, ProjectStatus } from "@prisma/client";
+import { DisputeStatus, PlatformRole, Prisma, ProjectStatus } from "@prisma/client";
 import { getAddress } from "viem";
 
 import type {
@@ -11,6 +11,9 @@ import type {
   ProjectSummary,
   MilestoneSummary,
   ProjectDetail,
+  ProjectDisputePreview,
+  ProjectSubmissionPreview,
+  ProjectTransactionHistoryItem,
   UserPublicRef,
 } from "@escrowflow/types";
 
@@ -190,7 +193,15 @@ function mapProjectDetail(project: {
     fundedAt: Date | null;
     releasedAt: Date | null;
     updatedAt: Date;
+    submissions?: Array<{ id: string }>;
+    disputes?: Array<{ id: string }>;
   }>;
+}, extras?: {
+  fundedAmountWei?: string;
+  releasedAmountWei?: string;
+  latestSubmission?: ProjectSubmissionPreview | null;
+  openDispute?: ProjectDisputePreview | null;
+  recentTransactions?: ProjectTransactionHistoryItem[];
 }): ProjectDetail {
   const milestones: MilestoneSummary[] = project.milestones.map((m) => ({
     id: m.id,
@@ -204,8 +215,8 @@ function mapProjectDetail(project: {
     fundedAt: m.fundedAt?.toISOString() ?? null,
     releasedAt: m.releasedAt?.toISOString() ?? null,
     updatedAt: m.updatedAt.toISOString(),
-    latestSubmissionId: null,
-    openDisputeId: null,
+    latestSubmissionId: m.submissions?.[0]?.id ?? null,
+    openDisputeId: m.disputes?.[0]?.id ?? null,
   }));
 
   return {
@@ -218,12 +229,18 @@ function mapProjectDetail(project: {
     onChainProjectId: project.onChainProjectId,
     paymentTokenAddress: project.paymentTokenAddress,
     totalValueWei: project.totalValueWei,
+    fundedAmountWei: extras?.fundedAmountWei ?? "0",
+    releasedAmountWei: extras?.releasedAmountWei ?? "0",
     client: toUserPublicRef(project.client),
     freelancer: project.freelancer ? toUserPublicRef(project.freelancer) : null,
     agreementIpfsUri: project.agreementIpfsUri,
+    agreementLinks: project.agreementIpfsUri ? [project.agreementIpfsUri] : [],
     milestoneCount: milestones.length,
-    openDisputeCount: 0,
+    openDisputeCount: extras?.openDispute ? 1 : 0,
     updatedAt: project.updatedAt.toISOString(),
+    latestSubmission: extras?.latestSubmission ?? null,
+    openDispute: extras?.openDispute ?? null,
+    recentTransactions: extras?.recentTransactions ?? [],
     milestones,
     completedAt: project.completedAt?.toISOString() ?? null,
     cancelledAt: project.cancelledAt?.toISOString() ?? null,
@@ -311,21 +328,140 @@ export async function getProjectDetailForUser(
   projectId: string,
   userId: string,
 ): Promise<ProjectDetail> {
-  const row = await prisma.project.findUnique({
-    where: { id: projectId },
-    include: {
-      client: { include: { profile: true } },
-      freelancer: { include: { profile: true } },
-      milestones: { orderBy: { sortOrder: "asc" } },
-    },
-  });
+  const [row, latestSubmissionRaw, openDisputeRaw, recentTxRaw, fundedRows, releasedRows] =
+    await prisma.$transaction([
+      prisma.project.findUnique({
+        where: { id: projectId },
+        include: {
+          client: { include: { profile: true } },
+          freelancer: { include: { profile: true } },
+          milestones: {
+            orderBy: { sortOrder: "asc" },
+            include: {
+              submissions: {
+                orderBy: { createdAt: "desc" },
+                take: 1,
+                select: { id: true, status: true, summary: true, submittedAt: true, createdAt: true },
+              },
+              disputes: {
+                where: {
+                  status: {
+                    in: [
+                      DisputeStatus.OPEN,
+                      DisputeStatus.AWAITING_RESPONSE,
+                      DisputeStatus.UNDER_ADMIN_REVIEW,
+                    ],
+                  },
+                },
+                orderBy: { createdAt: "desc" },
+                take: 1,
+                select: { id: true },
+              },
+            },
+          },
+        },
+      }),
+      prisma.submission.findFirst({
+        where: { milestone: { projectId } },
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          milestoneId: true,
+          status: true,
+          summary: true,
+          submittedAt: true,
+          createdAt: true,
+        },
+      }),
+      prisma.dispute.findFirst({
+        where: {
+          milestone: { projectId },
+          status: {
+            in: [
+              DisputeStatus.OPEN,
+              DisputeStatus.AWAITING_RESPONSE,
+              DisputeStatus.UNDER_ADMIN_REVIEW,
+            ],
+          },
+        },
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          milestoneId: true,
+          status: true,
+          title: true,
+          description: true,
+          evidenceIpfsUri: true,
+          createdAt: true,
+          resolvedAt: true,
+        },
+      }),
+      prisma.transactionLog.findMany({
+        where: { projectId },
+        orderBy: [{ blockNumber: "desc" }, { logIndex: "desc" }],
+        take: 20,
+        select: {
+          txHash: true,
+          blockNumber: true,
+          logIndex: true,
+          eventName: true,
+          fromAddress: true,
+          toAddress: true,
+          payload: true,
+          createdAt: true,
+        },
+      }),
+      prisma.$queryRaw<Array<{ funded: string | null }>>(Prisma.sql`
+        SELECT COALESCE(
+          MAX(
+            CASE
+              WHEN tl."eventName" = 'ProjectFunded'
+                THEN NULLIF(tl."payload"->>'fundedAmountAfter', '')::numeric
+              ELSE NULL
+            END
+          ),
+          SUM(
+            CASE
+              WHEN tl."eventName" = 'ProjectFunded'
+                THEN COALESCE(NULLIF(tl."payload"->>'amount', '')::numeric, 0)
+              ELSE 0
+            END
+          ),
+          0
+        )::text AS funded
+        FROM "transaction_logs" tl
+        WHERE tl."projectId" = ${projectId}
+      `),
+      prisma.$queryRaw<Array<{ released: string | null }>>(Prisma.sql`
+        SELECT COALESCE(SUM(
+          CASE
+            WHEN tl."eventName" = 'MilestoneFundsReleased'
+              THEN COALESCE(NULLIF(tl."payload"->>'amount', '')::numeric, 0)
+            WHEN tl."eventName" = 'DisputeResolved'
+              THEN COALESCE(NULLIF(tl."payload"->>'freelancerAmount', '')::numeric, 0)
+            ELSE 0
+          END
+        ), 0)::text AS released
+        FROM "transaction_logs" tl
+        WHERE tl."projectId" = ${projectId}
+      `),
+    ]);
   if (!row) {
     throw AppError.notFound("PROJECT_NOT_FOUND", "Project not found");
   }
   if (row.clientUserId !== userId && row.freelancerUserId !== userId) {
     throw AppError.forbidden("You are not a participant in this project");
   }
-  return mapProjectDetail(row);
+  return mapProjectDetail(
+    row,
+    {
+      fundedAmountWei: fundedRows[0]?.funded ?? "0",
+      releasedAmountWei: releasedRows[0]?.released ?? "0",
+      latestSubmission: latestSubmissionRaw ? mapSubmissionPreview(latestSubmissionRaw) : null,
+      openDispute: openDisputeRaw ? mapDisputePreview(openDisputeRaw) : null,
+      recentTransactions: recentTxRaw.map(mapProjectTransactionHistory),
+    },
+  );
 }
 
 function mapProjectSummary(project: {
@@ -415,6 +551,81 @@ function compareDeadline(
   }
   const base = l > r ? 1 : -1;
   return order === "asc" ? base : -base;
+}
+
+function mapSubmissionPreview(submission: {
+  id: string;
+  milestoneId: string;
+  status: string;
+  summary: string | null;
+  submittedAt: Date | null;
+  createdAt: Date;
+}): ProjectSubmissionPreview {
+  return {
+    id: submission.id,
+    milestoneId: submission.milestoneId,
+    status: submission.status,
+    summary: submission.summary,
+    submittedAt: submission.submittedAt?.toISOString() ?? null,
+    createdAt: submission.createdAt.toISOString(),
+  };
+}
+
+function mapDisputePreview(dispute: {
+  id: string;
+  milestoneId: string;
+  status: DisputeStatus;
+  title: string | null;
+  description: string;
+  evidenceIpfsUri: string;
+  createdAt: Date;
+  resolvedAt: Date | null;
+}): ProjectDisputePreview {
+  return {
+    id: dispute.id,
+    milestoneId: dispute.milestoneId,
+    status: dispute.status,
+    title: dispute.title,
+    description: dispute.description,
+    evidenceIpfsUri: dispute.evidenceIpfsUri,
+    createdAt: dispute.createdAt.toISOString(),
+    resolvedAt: dispute.resolvedAt?.toISOString() ?? null,
+  };
+}
+
+function mapProjectTransactionHistory(tx: {
+  txHash: string;
+  blockNumber: bigint;
+  logIndex: number;
+  eventName: string;
+  fromAddress: string | null;
+  toAddress: string | null;
+  payload: Prisma.JsonValue;
+  createdAt: Date;
+}): ProjectTransactionHistoryItem {
+  const payloadObject = tx.payload && typeof tx.payload === "object" ? tx.payload : null;
+  const blockTimestamp =
+    payloadObject && "blockTimestamp" in payloadObject
+      ? (payloadObject.blockTimestamp as unknown)
+      : null;
+  const amountRaw =
+    payloadObject && "amount" in payloadObject
+      ? (payloadObject.amount as unknown)
+      : payloadObject && "freelancerAmount" in payloadObject
+        ? (payloadObject.freelancerAmount as unknown)
+        : null;
+
+  return {
+    txHash: tx.txHash,
+    blockNumber: tx.blockNumber.toString(),
+    logIndex: tx.logIndex,
+    eventName: tx.eventName,
+    fromAddress: tx.fromAddress,
+    toAddress: tx.toAddress,
+    amountWei: typeof amountRaw === "string" ? amountRaw : null,
+    createdAt: tx.createdAt.toISOString(),
+    blockTimestamp: typeof blockTimestamp === "string" ? blockTimestamp : null,
+  };
 }
 
 function toUserPublicRef(user: {

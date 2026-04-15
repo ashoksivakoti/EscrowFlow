@@ -9,6 +9,38 @@ import type { ProjectStatus } from "../enums.js";
 import type { UserPublicRef } from "../profile.js";
 import type { MilestoneSummary } from "./milestone.js";
 
+export type ProjectSubmissionPreview = {
+  id: EntityId;
+  milestoneId: EntityId;
+  status: string;
+  summary: string | null;
+  submittedAt: IsoDateTimeString | null;
+  createdAt: IsoDateTimeString;
+};
+
+export type ProjectDisputePreview = {
+  id: EntityId;
+  milestoneId: EntityId;
+  status: string;
+  title: string | null;
+  description: string;
+  evidenceIpfsUri: IpfsUri;
+  createdAt: IsoDateTimeString;
+  resolvedAt: IsoDateTimeString | null;
+};
+
+export type ProjectTransactionHistoryItem = {
+  txHash: string;
+  blockNumber: string;
+  logIndex: number;
+  eventName: string;
+  fromAddress: WalletAddress | null;
+  toAddress: WalletAddress | null;
+  amountWei?: WeiAmount | null;
+  createdAt: IsoDateTimeString;
+  blockTimestamp: IsoDateTimeString | null;
+};
+
 export type ProjectSummary = {
   id: EntityId;
   status: ProjectStatus;
@@ -30,6 +62,12 @@ export type ProjectSummary = {
 
 export type ProjectDetail = ProjectSummary & {
   description: string | null;
+  fundedAmountWei: WeiAmount;
+  releasedAmountWei: WeiAmount;
+  agreementLinks: IpfsUri[];
+  latestSubmission: ProjectSubmissionPreview | null;
+  openDispute: ProjectDisputePreview | null;
+  recentTransactions: ProjectTransactionHistoryItem[];
   milestones: MilestoneSummary[];
   completedAt: IsoDateTimeString | null;
   cancelledAt: IsoDateTimeString | null;

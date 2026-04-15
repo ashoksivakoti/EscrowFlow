@@ -78,7 +78,13 @@ export type {
 
 export type { LogoutResponse } from "./api/auth.js";
 
-export type { ProjectSummary, ProjectDetail } from "./views/project.js";
+export type {
+  ProjectSummary,
+  ProjectDetail,
+  ProjectSubmissionPreview,
+  ProjectDisputePreview,
+  ProjectTransactionHistoryItem,
+} from "./views/project.js";
 export type { MilestoneSummary, MilestoneDetail } from "./views/milestone.js";
 export type {
   SubmissionListItem,
