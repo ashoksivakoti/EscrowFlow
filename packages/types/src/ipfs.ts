@@ -59,6 +59,7 @@ export type MilestoneSubmissionMetadata = IpfsJsonBase & {
   milestoneIndex?: number;
   submissionRound?: number;
   notes?: string;
+  externalLink?: string;
   deliverables: IpfsFileRef[];
 };
 

@@ -17,8 +17,15 @@ export type ListSubmissionsResponse = {
 };
 
 export type CreateSubmissionRequest = {
-  deliverablesIpfsUri: IpfsUri;
-  summary?: string | null;
+  /** Deprecated: legacy direct metadata URI path. */
+  deliverablesIpfsUri?: IpfsUri;
+  note?: string | null;
+  externalLink?: string | null;
+  files?: Array<{
+    fileName: string;
+    mimeType: string;
+    fileBase64: string;
+  }>;
   /** If true, server moves prior active attempt to SUPERSEDED. */
   submit?: boolean;
 };

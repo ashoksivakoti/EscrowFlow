@@ -39,6 +39,12 @@ export default function ProjectDetailShellPage() {
   }, [session, sessionLoading, me, meFetched, router]);
 
   const loading = !projectId || sessionLoading || (meEnabled && meLoading && !meFetched) || projectLoading;
+  const isAssignedFreelancer = Boolean(
+    me?.roles.includes("FREELANCER") &&
+      project &&
+      project.freelancer &&
+      me.id === project.freelancer.id,
+  );
 
   return (
     <AuthShell
@@ -174,6 +180,28 @@ export default function ProjectDetailShellPage() {
                         {milestone.releasedAt ? formatDateTime(milestone.releasedAt) : "Not released"}
                       </p>
                     </div>
+                    {isAssignedFreelancer ? (
+                      <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:justify-end">
+                        {canSubmitMilestone(milestone.status) ? (
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={() =>
+                              router.push(
+                                `/projects/${project.id}/milestones/${milestone.id}/submit`,
+                              )
+                            }
+                          >
+                            Submit work
+                          </Button>
+                        ) : (
+                          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                            Submission is unavailable until this milestone is funded and in
+                            progress.
+                          </p>
+                        )}
+                      </div>
+                    ) : null}
                   </div>
                 ))
               )}
@@ -354,4 +382,8 @@ function toGatewayUrl(uri: string): string {
   }
   const value = uri.replace("ipfs://", "");
   return `https://gateway.pinata.cloud/ipfs/${value}`;
+}
+
+function canSubmitMilestone(status: string): boolean {
+  return ["FUNDED", "IN_PROGRESS", "REJECTED"].includes(status);
 }

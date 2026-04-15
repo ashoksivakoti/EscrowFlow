@@ -1,6 +1,7 @@
 import type { EntityId, IpfsUri, IsoDateTimeString } from "../primitives.js";
 import type { SubmissionStatus } from "../enums.js";
 import type { UserPublicRef } from "../profile.js";
+import type { IpfsFileRef } from "../ipfs.js";
 
 export type SubmissionListItem = {
   id: EntityId;
@@ -16,5 +17,9 @@ export type SubmissionListItem = {
 };
 
 export type SubmissionDetail = SubmissionListItem & {
+  note?: string | null;
+  externalLink?: string | null;
+  metadataIpfsUri?: IpfsUri | null;
+  deliverableFiles?: IpfsFileRef[];
   updatedAt: IsoDateTimeString;
 };
