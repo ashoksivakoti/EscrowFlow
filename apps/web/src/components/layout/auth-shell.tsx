@@ -9,11 +9,13 @@ export function AuthShell({
   subtitle,
   children,
   className,
+  containerClassName,
 }: {
   title: string;
   subtitle?: string;
   children: ReactNode;
   className?: string;
+  containerClassName?: string;
 }) {
   return (
     <div
@@ -22,7 +24,12 @@ export function AuthShell({
         className,
       )}
     >
-      <div className="mx-auto flex min-h-dvh w-full max-w-lg flex-col px-4 py-10 sm:max-w-xl sm:px-6 sm:py-16">
+      <div
+        className={cn(
+          "mx-auto flex min-h-dvh w-full max-w-lg flex-col px-4 py-10 sm:max-w-xl sm:px-6 sm:py-16",
+          containerClassName,
+        )}
+      >
         <header className="mb-8 flex flex-col items-center gap-3 text-center sm:mb-10">
           <BrandMark />
           <div className="space-y-1">

@@ -33,21 +33,37 @@ const OPEN_DISPUTE_STATUSES: DisputeStatus[] = [
 
 export async function buildClientDashboard(userId: string): Promise<ClientDashboard> {
   const [
+    recentProjectsRaw,
     activeProjectsRaw,
+    activeProjectsCount,
     awaitingFreelancerRaw,
     awaitingEscrowRaw,
+    awaitingEscrowCount,
     totalTrackedProjectCount,
+    completedProjectsCount,
     reviewMilestones,
+    pendingMilestoneReviewsCount,
     openDisputes,
+    openDisputesCount,
+    escrowTotals,
     recentTxRaw,
     notificationsRaw,
     unreadNotificationsCount,
   ] = await prisma.$transaction([
     prisma.project.findMany({
+      where: { clientUserId: userId },
+      orderBy: { updatedAt: "desc" },
+      take: 8,
+      include: projectSummaryInclude(),
+    }),
+    prisma.project.findMany({
       where: { clientUserId: userId, status: { in: ACTIVE_PROJECT_STATUSES } },
       orderBy: { updatedAt: "desc" },
       take: 8,
       include: projectSummaryInclude(),
+    }),
+    prisma.project.count({
+      where: { clientUserId: userId, status: { in: ACTIVE_PROJECT_STATUSES } },
     }),
     prisma.project.findMany({
       where: { clientUserId: userId, status: ProjectStatus.AWAITING_FREELANCER },
@@ -62,7 +78,13 @@ export async function buildClientDashboard(userId: string): Promise<ClientDashbo
       include: projectSummaryInclude(),
     }),
     prisma.project.count({
+      where: { clientUserId: userId, status: ProjectStatus.AWAITING_ESCROW },
+    }),
+    prisma.project.count({
       where: { clientUserId: userId },
+    }),
+    prisma.project.count({
+      where: { clientUserId: userId, status: ProjectStatus.COMPLETED },
     }),
     prisma.milestone.findMany({
       where: {
@@ -78,6 +100,12 @@ export async function buildClientDashboard(userId: string): Promise<ClientDashbo
         project: { select: { title: true } },
       },
     }),
+    prisma.milestone.count({
+      where: {
+        project: { clientUserId: userId },
+        status: { in: CLIENT_REVIEW_MILESTONE_STATUSES },
+      },
+    }),
     prisma.dispute.findMany({
       where: {
         status: { in: OPEN_DISPUTE_STATUSES },
@@ -91,6 +119,22 @@ export async function buildClientDashboard(userId: string): Promise<ClientDashbo
         milestone: { select: { projectId: true, project: { select: { title: true } } } },
       },
     }),
+    prisma.dispute.count({
+      where: {
+        status: { in: OPEN_DISPUTE_STATUSES },
+        milestone: { project: { clientUserId: userId } },
+      },
+    }),
+    prisma.$queryRaw<Array<{ total: string | null }>>(Prisma.sql`
+      SELECT COALESCE(SUM(CAST("totalValueWei" AS numeric)), 0)::text AS total
+      FROM "projects"
+      WHERE "clientUserId" = ${userId}
+        AND "status" IN (${Prisma.join([
+          ProjectStatus.AWAITING_ESCROW,
+          ProjectStatus.ACTIVE,
+          ProjectStatus.ON_HOLD,
+        ])})
+    `),
     prisma.transactionLog.findMany({
       where: {
         OR: [{ project: { clientUserId: userId } }, { initiatedByUserId: userId }],
@@ -129,9 +173,11 @@ export async function buildClientDashboard(userId: string): Promise<ClientDashbo
     }),
   ]);
 
+  const recentProjects = recentProjectsRaw.map(mapProjectSummary);
   const activeProjects = activeProjectsRaw.map(mapProjectSummary);
   const awaitingFreelancer = awaitingFreelancerRaw.map(mapProjectSummary);
   const awaitingEscrow = awaitingEscrowRaw.map(mapProjectSummary);
+  const totalEscrowLockedWei = escrowTotals[0]?.total ?? "0";
 
   const actions: DashboardActionItem[] = [
     ...awaitingEscrow.map((project) => ({
@@ -164,12 +210,17 @@ export async function buildClientDashboard(userId: string): Promise<ClientDashbo
   return {
     role: "CLIENT",
     summary: {
-      activeProjectsCount: activeProjects.length,
       pendingActionsCount: actions.length,
       unreadNotificationsCount,
-      awaitingEscrowCount: awaitingEscrow.length,
+      activeProjectsCount,
+      awaitingEscrowCount,
       totalTrackedProjectCount,
+      totalEscrowLockedWei,
+      pendingMilestoneReviewsCount,
+      openDisputesCount,
+      completedProjectsCount,
     },
+    recentProjects,
     activeProjects,
     awaitingFreelancer,
     awaitingEscrow,

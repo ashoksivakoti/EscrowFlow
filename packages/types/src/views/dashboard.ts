@@ -47,7 +47,12 @@ export type ClientDashboard = {
   summary: DashboardSummaryMetrics & {
     awaitingEscrowCount: number;
     totalTrackedProjectCount: number;
+    totalEscrowLockedWei: string;
+    pendingMilestoneReviewsCount: number;
+    openDisputesCount: number;
+    completedProjectsCount: number;
   };
+  recentProjects: ProjectSummary[];
   activeProjects: ProjectSummary[];
   awaitingFreelancer: ProjectSummary[];
   awaitingEscrow: ProjectSummary[];
