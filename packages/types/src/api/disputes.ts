@@ -15,8 +15,20 @@ export type ListDisputesResponse = {
 
 export type CreateDisputeRequest = {
   title?: string | null;
-  description: string;
-  evidenceIpfsUri: IpfsUri;
+  /** Human-readable reason shown in participant and admin review UIs. */
+  reason: string;
+  /** Optional legacy alias retained for older clients. */
+  description?: string;
+  /**
+   * Optional legacy direct IPFS URI. New clients should upload evidence files and let the server
+   * generate dispute evidence metadata URI.
+   */
+  evidenceIpfsUri?: IpfsUri;
+  files?: Array<{
+    fileName: string;
+    mimeType: string;
+    fileBase64: string;
+  }>;
   relatedSubmissionId?: EntityId | null;
 };
 

@@ -4,6 +4,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect } from "react";
 
 import { AuthShell } from "@/components/layout/auth-shell";
+import { DisputeCreatePanel } from "@/components/projects/dispute-create-panel";
 import { MilestoneApprovalPanel } from "@/components/projects/milestone-approval-panel";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -134,6 +135,14 @@ export default function ProjectDetailShellPage() {
               <p className="break-words text-sm text-amber-900 dark:text-amber-200">
                 {project.openDispute.description}
               </p>
+              <a
+                href={toGatewayUrl(project.openDispute.evidenceIpfsUri)}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-2 inline-block break-all text-xs text-amber-900 underline dark:text-amber-200"
+              >
+                Evidence package: {project.openDispute.evidenceIpfsUri}
+              </a>
             </Card>
           ) : null}
 
@@ -152,10 +161,7 @@ export default function ProjectDetailShellPage() {
                 />
               ) : (
                 project.milestones.map((milestone) => (
-                  <div
-                    key={milestone.id}
-                    className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-800"
-                  >
+                  <div key={milestone.id} className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                       <div className="min-w-0">
                         <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
@@ -182,9 +188,14 @@ export default function ProjectDetailShellPage() {
                         {milestone.releasedAt ? formatDateTime(milestone.releasedAt) : "Not released"}
                       </p>
                     </div>
+                    {isMilestoneFrozen(project.status, milestone.openDisputeId) ? (
+                      <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300">
+                        Milestone actions are frozen while a dispute is active.
+                      </div>
+                    ) : null}
                     {isAssignedFreelancer ? (
                       <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:justify-end">
-                        {canSubmitMilestone(milestone.status) ? (
+                        {canSubmitMilestone(project.status, milestone.status, milestone.openDisputeId) ? (
                           <Button
                             type="button"
                             size="sm"
@@ -198,8 +209,8 @@ export default function ProjectDetailShellPage() {
                           </Button>
                         ) : (
                           <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                            Submission is unavailable until this milestone is funded and in
-                            progress.
+                            Submission is unavailable while disputed or until this milestone is
+                            funded and in progress.
                           </p>
                         )}
                       </div>
@@ -207,7 +218,7 @@ export default function ProjectDetailShellPage() {
                     {isProjectClient &&
                     project.latestSubmission &&
                     project.latestSubmission.milestoneId === milestone.id &&
-                    canClientApprovePayout(project, milestone.status) ? (
+                    canClientApprovePayout(project, milestone.status, milestone.openDisputeId) ? (
                       <MilestoneApprovalPanel
                         projectId={project.id}
                         milestoneId={milestone.id}
@@ -217,6 +228,22 @@ export default function ProjectDetailShellPage() {
                         onChainProjectId={project.onChainProjectId!}
                         escrowContractAddress={project.escrowContractAddress as `0x${string}`}
                         releasedAmountWei={milestone.amountWei}
+                      />
+                    ) : null}
+                    {canRaiseDispute({
+                      projectStatus: project.status,
+                      milestoneStatus: milestone.status,
+                      milestoneOpenDisputeId: milestone.openDisputeId,
+                      isParticipant: isProjectClient || isAssignedFreelancer,
+                    }) ? (
+                      <DisputeCreatePanel
+                        projectId={project.id}
+                        milestoneId={milestone.id}
+                        relatedSubmissionId={
+                          project.latestSubmission?.milestoneId === milestone.id
+                            ? project.latestSubmission.id
+                            : null
+                        }
                       />
                     ) : null}
                   </div>
@@ -460,22 +487,56 @@ function toGatewayUrl(uri: string): string {
   return `https://gateway.pinata.cloud/ipfs/${value}`;
 }
 
-function canSubmitMilestone(status: string): boolean {
-  return ["FUNDED", "IN_PROGRESS", "REJECTED"].includes(status);
+function canSubmitMilestone(
+  projectStatus: string,
+  milestoneStatus: string,
+  openDisputeId: string | null,
+): boolean {
+  if (isMilestoneFrozen(projectStatus, openDisputeId)) {
+    return false;
+  }
+  return ["FUNDED", "IN_PROGRESS", "REJECTED"].includes(milestoneStatus);
 }
 
 function canClientApprovePayout(
   project: {
+    status?: string;
     chainId: number | null;
     onChainProjectId: string | null;
     escrowContractAddress: string | null;
   },
   milestoneStatus: string,
+  openDisputeId: string | null,
 ): boolean {
+  if (isMilestoneFrozen(project.status ?? "ACTIVE", openDisputeId)) {
+    return false;
+  }
   if (!project.chainId || !project.onChainProjectId || !project.escrowContractAddress) {
     return false;
   }
   return ["SUBMITTED", "CLIENT_REVIEW", "APPROVED"].includes(milestoneStatus);
+}
+
+function canRaiseDispute(input: {
+  projectStatus: string;
+  milestoneStatus: string;
+  milestoneOpenDisputeId: string | null;
+  isParticipant: boolean;
+}): boolean {
+  if (!input.isParticipant) {
+    return false;
+  }
+  if (input.milestoneOpenDisputeId) {
+    return false;
+  }
+  if (!["ACTIVE", "DISPUTED"].includes(input.projectStatus)) {
+    return false;
+  }
+  return ["SUBMITTED", "APPROVED"].includes(input.milestoneStatus);
+}
+
+function isMilestoneFrozen(projectStatus: string, openDisputeId: string | null): boolean {
+  return Boolean(openDisputeId) || projectStatus === "DISPUTED";
 }
 
 function formatFileSize(bytes: number): string {
