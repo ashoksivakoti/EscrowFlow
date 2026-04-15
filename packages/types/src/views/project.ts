@@ -37,6 +37,7 @@ export type ProjectDisputePreview = {
 };
 
 export type ProjectTransactionHistoryItem = {
+  chainId?: number | null;
   txHash: string;
   blockNumber: string;
   logIndex: number;

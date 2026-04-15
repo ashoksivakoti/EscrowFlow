@@ -142,6 +142,7 @@ export async function buildClientDashboard(userId: string): Promise<ClientDashbo
       orderBy: [{ blockNumber: "desc" }, { logIndex: "desc" }],
       take: 10,
       select: {
+        chainId: true,
         txHash: true,
         blockNumber: true,
         logIndex: true,
@@ -321,6 +322,7 @@ export async function buildFreelancerDashboard(
       orderBy: [{ blockNumber: "desc" }, { logIndex: "desc" }],
       take: 10,
       select: {
+        chainId: true,
         txHash: true,
         blockNumber: true,
         logIndex: true,
@@ -466,6 +468,7 @@ function toUserPublicRef(user: {
 }
 
 function mapRecentTransaction(tx: {
+  chainId: number;
   txHash: string;
   blockNumber: bigint;
   logIndex: number;
@@ -487,6 +490,7 @@ function mapRecentTransaction(tx: {
         ? (payloadObject.freelancerAmount as unknown)
         : null;
   return {
+    chainId: tx.chainId,
     txHash: tx.txHash,
     blockNumber: tx.blockNumber.toString(),
     logIndex: tx.logIndex,

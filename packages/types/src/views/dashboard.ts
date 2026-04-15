@@ -32,6 +32,7 @@ export type DashboardSummaryMetrics = {
 };
 
 export type DashboardRecentTransaction = {
+  chainId?: number | null;
   txHash: string;
   blockNumber: string;
   logIndex: number;

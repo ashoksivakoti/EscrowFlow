@@ -13,6 +13,7 @@ export type ListNotificationsResponse = {
   items: NotificationListItem[];
   nextCursor: string | null;
   hasMore: boolean;
+  unreadCount?: number;
 };
 
 export type MarkNotificationReadResponse = {

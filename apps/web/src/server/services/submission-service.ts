@@ -16,6 +16,7 @@ import type { CreateMilestoneSubmissionBody } from "@/server/validation/schemas/
 import { prisma, prismaInteractiveTransactionOptions } from "@/lib/prisma";
 import { uploadFileToIpfs, uploadJsonToIpfs } from "@/lib/ipfs";
 import { AppError } from "@/server/errors/app-error";
+import { notifyMilestoneSubmitted } from "@/server/services/notification-events";
 
 const ALLOWED_PROJECT_STATUSES = new Set<ProjectStatus>([ProjectStatus.ACTIVE]);
 const ALLOWED_MILESTONE_STATUSES = new Set<MilestoneStatus>([
@@ -105,6 +106,14 @@ export async function createMilestoneSubmissionForFreelancer(input: {
     prismaInteractiveTransactionOptions,
   );
 
+  void notifyMilestoneSubmitted({
+    projectId: context.project.id,
+    milestoneId: context.milestone.id,
+    milestoneTitle: context.milestone.title,
+    clientUserId: context.project.clientUserId,
+    freelancerUserId: input.freelancerUserId,
+  }).catch(() => undefined);
+
   return {
     submission: mapSubmissionDetail(created, {
       metadataIpfsUri: metadataUpload.uri,
@@ -121,7 +130,9 @@ async function loadMilestoneSubmissionContext(projectId: string, milestoneId: st
       project: {
         select: {
           id: true,
+          title: true,
           status: true,
+          clientUserId: true,
           freelancerUserId: true,
         },
       },

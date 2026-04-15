@@ -20,6 +20,7 @@ import type {
 import { prisma, prismaInteractiveTransactionOptions } from "@/lib/prisma";
 import { uploadFileToIpfs, uploadJsonToIpfs } from "@/lib/ipfs";
 import { AppError } from "@/server/errors/app-error";
+import { notifyProjectCreated } from "@/server/services/notification-events";
 
 function normalizeWalletOrThrow(raw: string): string {
   try {
@@ -113,6 +114,13 @@ export async function createProjectForClient(
     },
     prismaInteractiveTransactionOptions,
   );
+
+  void notifyProjectCreated({
+    projectId: created.id,
+    projectTitle: created.title,
+    clientUserId,
+    freelancerUserId: created.freelancer?.id ?? null,
+  }).catch(() => undefined);
 
   return { project: mapProjectDetail(created) };
 }
@@ -403,6 +411,7 @@ export async function getProjectDetailForUser(
         orderBy: [{ blockNumber: "desc" }, { logIndex: "desc" }],
         take: 20,
         select: {
+          chainId: true,
           txHash: true,
           blockNumber: true,
           logIndex: true,
@@ -620,6 +629,7 @@ function mapDisputePreview(dispute: {
 }
 
 function mapProjectTransactionHistory(tx: {
+  chainId: number;
   txHash: string;
   blockNumber: bigint;
   logIndex: number;
@@ -642,6 +652,7 @@ function mapProjectTransactionHistory(tx: {
         : null;
 
   return {
+    chainId: tx.chainId,
     txHash: tx.txHash,
     blockNumber: tx.blockNumber.toString(),
     logIndex: tx.logIndex,

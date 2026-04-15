@@ -13,6 +13,7 @@ import { needsOnboarding } from "@/lib/auth/client-guards";
 import { useMeQuery } from "@/hooks/use-me-query";
 import { useProjectDetailQuery } from "@/hooks/use-project-detail-query";
 import { useSessionQuery } from "@/hooks/use-session-query";
+import { getExplorerTxUrl } from "@/lib/chains/explorer";
 
 export default function ProjectDetailShellPage() {
   const router = useRouter();
@@ -378,6 +379,16 @@ export default function ProjectDetailShellPage() {
                       <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-zinc-600 dark:text-zinc-400">
                         <span>{formatTimeAgo(tx.blockTimestamp ?? tx.createdAt)}</span>
                         {tx.amountWei ? <span>• Amount {formatWei(tx.amountWei)}</span> : null}
+                        {getExplorerTxUrl(tx.chainId ?? project.chainId, tx.txHash) ? (
+                          <a
+                            href={getExplorerTxUrl(tx.chainId ?? project.chainId, tx.txHash)!}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="font-medium text-indigo-600 hover:underline dark:text-indigo-400"
+                          >
+                            • View on explorer
+                          </a>
+                        ) : null}
                       </div>
                     </div>
                   ))

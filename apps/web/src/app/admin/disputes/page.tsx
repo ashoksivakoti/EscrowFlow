@@ -18,6 +18,7 @@ import { useAdminDisputesQuery } from "@/hooks/use-admin-disputes-query";
 import { useMeQuery } from "@/hooks/use-me-query";
 import { useSessionQuery } from "@/hooks/use-session-query";
 import { escrowRegistryAbi } from "@/lib/contracts/escrow-registry-abi";
+import { getExplorerTxUrl } from "@/lib/chains/explorer";
 
 type ResolutionKind = "PAYOUT_TO_FREELANCER" | "REFUND_TO_CLIENT" | "SPLIT";
 
@@ -329,6 +330,16 @@ function DisputeCard({ dispute }: { dispute: AdminDisputeDetail }) {
               >
                 <p className="font-medium text-zinc-800 dark:text-zinc-200">{tx.eventName}</p>
                 <p className="break-all text-zinc-600 dark:text-zinc-400">{tx.txHash}</p>
+                {getExplorerTxUrl(tx.chainId ?? dispute.project.chainId, tx.txHash) ? (
+                  <a
+                    href={getExplorerTxUrl(tx.chainId ?? dispute.project.chainId, tx.txHash)!}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-1 inline-block font-medium text-indigo-600 hover:underline dark:text-indigo-400"
+                  >
+                    View on explorer
+                  </a>
+                ) : null}
               </div>
             ))
           )}

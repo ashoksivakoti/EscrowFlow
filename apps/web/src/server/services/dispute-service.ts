@@ -12,6 +12,7 @@ import type { CreateMilestoneDisputeBody } from "@/server/validation/schemas/dis
 import { prisma, prismaInteractiveTransactionOptions } from "@/lib/prisma";
 import { uploadFileToIpfs, uploadJsonToIpfs } from "@/lib/ipfs";
 import { AppError } from "@/server/errors/app-error";
+import { notifyDisputeRaised } from "@/server/services/notification-events";
 
 const ALLOWED_PROJECT_STATUSES = new Set<ProjectStatus>([
   ProjectStatus.ACTIVE,
@@ -109,6 +110,16 @@ export async function createMilestoneDisputeForParticipant(input: {
     prismaInteractiveTransactionOptions,
   );
 
+  void notifyDisputeRaised({
+    projectId: context.project.id,
+    milestoneId: context.milestone.id,
+    milestoneTitle: context.milestone.title,
+    openedByUserId: input.openedByUserId,
+    clientUserId: context.project.clientUserId,
+    freelancerUserId: context.project.freelancerUserId,
+    disputeId: created.id,
+  }).catch(() => undefined);
+
   return {
     dispute: mapDisputeDetail(created, now),
   };
@@ -121,6 +132,7 @@ async function loadDisputeContext(projectId: string, milestoneId: string, opened
       project: {
         select: {
           id: true,
+          title: true,
           status: true,
           chainId: true,
           escrowContractAddress: true,

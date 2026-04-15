@@ -14,6 +14,7 @@ import { useClientDashboardQuery } from "@/hooks/use-client-dashboard-query";
 import { useFreelancerDashboardQuery } from "@/hooks/use-freelancer-dashboard-query";
 import { useMeQuery } from "@/hooks/use-me-query";
 import { useSessionQuery } from "@/hooks/use-session-query";
+import { getExplorerTxUrl } from "@/lib/chains/explorer";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -578,6 +579,19 @@ function TransactionList({
                 >
                   View project
                 </Link>
+              </>
+            ) : null}
+            {getExplorerTxUrl(tx.chainId, tx.txHash) ? (
+              <>
+                <span>•</span>
+                <a
+                  href={getExplorerTxUrl(tx.chainId, tx.txHash)!}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-medium text-indigo-600 hover:underline dark:text-indigo-400"
+                >
+                  Explorer
+                </a>
               </>
             ) : null}
           </div>

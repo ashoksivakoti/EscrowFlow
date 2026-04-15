@@ -13,6 +13,7 @@ import type {
 } from "@/server/validation/schemas/admin-disputes";
 import { prisma, prismaInteractiveTransactionOptions } from "@/lib/prisma";
 import { AppError } from "@/server/errors/app-error";
+import { notifyDisputeResolved } from "@/server/services/notification-events";
 
 const OPEN_DISPUTE_STATUSES: DisputeStatus[] = [
   DisputeStatus.OPEN,
@@ -270,6 +271,16 @@ export async function resolveDisputeAsAdmin(input: {
     throw AppError.notFound("DISPUTE_NOT_FOUND", "Dispute not found after resolution");
   }
 
+  void notifyDisputeResolved({
+    projectId: refreshed.milestone.project.id,
+    milestoneId: refreshed.milestone.id,
+    milestoneTitle: refreshed.milestone.title,
+    clientUserId: refreshed.milestone.project.client.id,
+    freelancerUserId: refreshed.milestone.project.freelancer?.id ?? null,
+    disputeId: refreshed.id,
+    outcome: mapKindToNotificationOutcome(input.payload.kind),
+  }).catch(() => undefined);
+
   return { dispute: await mapAdminDisputeDetail(refreshed) };
 }
 
@@ -388,6 +399,18 @@ function mapKindToDisputeStatus(kind: ResolveDisputeBody["kind"]): DisputeStatus
   return DisputeStatus.RESOLVED_SPLIT;
 }
 
+function mapKindToNotificationOutcome(
+  kind: ResolveDisputeBody["kind"],
+): "RESOLVED_CLIENT_FAVOR" | "RESOLVED_FREELANCER_FAVOR" | "RESOLVED_SPLIT" {
+  if (kind === "PAYOUT_TO_FREELANCER") {
+    return "RESOLVED_FREELANCER_FAVOR";
+  }
+  if (kind === "REFUND_TO_CLIENT") {
+    return "RESOLVED_CLIENT_FAVOR";
+  }
+  return "RESOLVED_SPLIT";
+}
+
 async function mapAdminDisputeDetail(dispute: {
   id: string;
   milestoneId: string;
@@ -492,6 +515,7 @@ async function mapAdminDisputeDetail(dispute: {
       orderBy: [{ blockNumber: "desc" }, { logIndex: "desc" }],
       take: 12,
       select: {
+        chainId: true,
         txHash: true,
         blockNumber: true,
         logIndex: true,
@@ -604,6 +628,7 @@ async function mapAdminDisputeDetail(dispute: {
             ? (payloadObject.freelancerAmount as unknown)
             : null;
       return {
+        chainId: tx.chainId,
         txHash: tx.txHash,
         blockNumber: tx.blockNumber.toString(),
         logIndex: tx.logIndex,

@@ -3,6 +3,7 @@ import { ProjectStatus } from "@prisma/client";
 import type { ReconcileFundingBody } from "@/server/validation/schemas/funding";
 import { prisma, prismaInteractiveTransactionOptions } from "@/lib/prisma";
 import { AppError } from "@/server/errors/app-error";
+import { notifyProjectFunded } from "@/server/services/notification-events";
 
 export async function reconcileProjectFunding(
   projectId: string,
@@ -16,6 +17,13 @@ export async function reconcileProjectFunding(
 }> {
   const project = await prisma.project.findUnique({
     where: { id: projectId },
+    select: {
+      id: true,
+      title: true,
+      clientUserId: true,
+      freelancerUserId: true,
+      totalValueWei: true,
+    },
   });
   if (!project) {
     throw AppError.notFound("PROJECT_NOT_FOUND", "Project not found");
@@ -77,6 +85,13 @@ export async function reconcileProjectFunding(
     },
     prismaInteractiveTransactionOptions,
   );
+
+  void notifyProjectFunded({
+    projectId: project.id,
+    projectTitle: project.title,
+    clientUserId: project.clientUserId,
+    freelancerUserId: project.freelancerUserId,
+  }).catch(() => undefined);
 
   return {
     projectId,

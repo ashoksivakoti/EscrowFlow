@@ -3,6 +3,10 @@ import { MilestoneStatus, ProjectStatus, SubmissionStatus } from "@prisma/client
 import type { ApproveAndPayoutBody } from "@/server/validation/schemas/milestone-review";
 import { prisma, prismaInteractiveTransactionOptions } from "@/lib/prisma";
 import { AppError } from "@/server/errors/app-error";
+import {
+  notifyFundsReleased,
+  notifyMilestoneApproved,
+} from "@/server/services/notification-events";
 
 export async function reconcileMilestoneApprovalAndPayout(input: {
   projectId: string;
@@ -172,6 +176,21 @@ export async function reconcileMilestoneApprovalAndPayout(input: {
 
   const releasedAmountWei = input.payload.releasedAmountWei;
   const projectReleasedAmountWei = await sumProjectReleasedAmount(input.projectId);
+
+  void notifyMilestoneApproved({
+    projectId: input.projectId,
+    milestoneId: input.milestoneId,
+    milestoneTitle: milestone.title,
+    clientUserId: input.clientUserId,
+    freelancerUserId: project.freelancerUserId,
+  }).catch(() => undefined);
+  void notifyFundsReleased({
+    projectId: input.projectId,
+    milestoneId: input.milestoneId,
+    milestoneTitle: milestone.title,
+    clientUserId: input.clientUserId,
+    freelancerUserId: project.freelancerUserId,
+  }).catch(() => undefined);
 
   return {
     projectId: input.projectId,

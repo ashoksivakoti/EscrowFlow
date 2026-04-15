@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { BrandMark } from "@escrowflow/ui";
 
 import { cn } from "@/lib/cn";
+import { NotificationBell } from "@/components/notifications/notification-bell";
 
 export function AuthShell({
   title,
@@ -10,12 +11,14 @@ export function AuthShell({
   children,
   className,
   containerClassName,
+  showNotifications = true,
 }: {
   title: string;
   subtitle?: string;
   children: ReactNode;
   className?: string;
   containerClassName?: string;
+  showNotifications?: boolean;
 }) {
   return (
     <div
@@ -30,7 +33,12 @@ export function AuthShell({
           containerClassName,
         )}
       >
-        <header className="mb-8 flex flex-col items-center gap-3 text-center sm:mb-10">
+        <header className="relative mb-8 flex flex-col items-center gap-3 text-center sm:mb-10">
+          {showNotifications ? (
+            <div className="absolute right-0 top-0">
+              <NotificationBell />
+            </div>
+          ) : null}
           <BrandMark />
           <div className="space-y-1">
             <p className="text-xs font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
