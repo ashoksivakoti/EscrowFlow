@@ -6,6 +6,7 @@ import type {
 } from "../primitives.js";
 import type { DisputeStatus } from "../enums.js";
 import type { UserPublicRef } from "../profile.js";
+import type { ProjectTransactionHistoryItem } from "./project.js";
 
 export type DisputeListItem = {
   id: EntityId;
@@ -24,4 +25,51 @@ export type DisputeDetail = DisputeListItem & {
   description: string;
   resolvedBy: UserPublicRef | null;
   updatedAt: IsoDateTimeString;
+};
+
+export type AdminDisputeResolutionKind =
+  | "PAYOUT_TO_FREELANCER"
+  | "REFUND_TO_CLIENT"
+  | "SPLIT";
+
+export type AdminDisputeDetail = DisputeDetail & {
+  project: {
+    id: EntityId;
+    title: string;
+    status: string;
+    chainId: number | null;
+    escrowContractAddress: string | null;
+    onChainProjectId: string | null;
+    paymentTokenAddress: string | null;
+    totalValueWei: string | null;
+    fundedAmountWei: string;
+    releasedAmountWei: string;
+  };
+  milestone: {
+    id: EntityId;
+    sortOrder: number;
+    title: string;
+    status: string;
+    amountWei: string;
+    dueAt: IsoDateTimeString | null;
+    latestSubmissionId: EntityId | null;
+  };
+  participants: {
+    client: UserPublicRef;
+    freelancer: UserPublicRef | null;
+  };
+  relatedSubmission: {
+    id: EntityId;
+    status: string;
+    submittedAt: IsoDateTimeString | null;
+    note: string | null;
+  } | null;
+  evidenceLinks: IpfsUri[];
+  resolution: {
+    kind: AdminDisputeResolutionKind | null;
+    freelancerAmountWei: string | null;
+    clientAmountWei: string | null;
+    note: string | null;
+  } | null;
+  recentTransactions: ProjectTransactionHistoryItem[];
 };

@@ -90,7 +90,12 @@ export type {
   SubmissionListItem,
   SubmissionDetail,
 } from "./views/submission.js";
-export type { DisputeListItem, DisputeDetail } from "./views/dispute.js";
+export type {
+  DisputeListItem,
+  DisputeDetail,
+  AdminDisputeDetail,
+  AdminDisputeResolutionKind,
+} from "./views/dispute.js";
 export type { NotificationListItem } from "./views/notification.js";
 export type { ReviewListItem } from "./views/review.js";
 export type {
@@ -158,6 +163,10 @@ export type {
   GetDisputeResponse,
   UpdateDisputeRequest,
   UpdateDisputeResponse,
+  ListAdminDisputesQuery,
+  ListAdminDisputesResponse,
+  ResolveDisputeRequest,
+  ResolveDisputeResponse,
 } from "./api/disputes.js";
 
 export type {

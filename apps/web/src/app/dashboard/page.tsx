@@ -26,6 +26,8 @@ export default function DashboardPage() {
     ? "CLIENT"
     : me?.roles.includes("FREELANCER")
       ? "FREELANCER"
+      : me?.roles.includes("ADMIN")
+        ? "ADMIN"
       : null;
   const { data: clientDashboard, isPending: clientDashboardLoading } =
     useClientDashboardQuery(dashboardLens === "CLIENT");
@@ -67,9 +69,14 @@ export default function DashboardPage() {
     (dashboardLens === "CLIENT" && clientDashboardLoading && !clientDashboard) ||
     (dashboardLens === "FREELANCER" && freelancerDashboardLoading && !freelancerDashboard);
   const title =
+    dashboardLens === "ADMIN"
+      ? "Admin dashboard"
+      : 
     dashboardLens === "FREELANCER" ? "Freelancer dashboard" : "Client dashboard";
   const subtitle =
-    dashboardLens === "FREELANCER"
+    dashboardLens === "ADMIN"
+      ? "Resolve disputes and keep escrow workflow safe."
+      : dashboardLens === "FREELANCER"
       ? "Track deliveries, reviews, payouts, and disputes."
       : "Track escrow health, pending reviews, and recent project activity.";
 
@@ -84,6 +91,23 @@ export default function DashboardPage() {
         <div className="flex w-full flex-col gap-4">
           <DashboardSkeleton />
         </div>
+      ) : dashboardLens === "ADMIN" ? (
+        <Card className="w-full max-w-full">
+          <CardHeader>
+            <CardTitle>Admin tools</CardTitle>
+            <CardDescription>
+              Manage open disputes, validate payout/refund math, and finalize arbitration outcomes.
+            </CardDescription>
+          </CardHeader>
+          <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+            <Button type="button" onClick={() => router.push("/admin/disputes")}>
+              Open dispute management
+            </Button>
+            <Button type="button" variant="secondary" onClick={() => signOut()}>
+              Sign out
+            </Button>
+          </div>
+        </Card>
       ) : !me.roles.includes("CLIENT") ? (
         <Card className="w-full max-w-full">
           <CardHeader>

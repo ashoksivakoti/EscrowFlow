@@ -1,7 +1,11 @@
 import type { EntityId, IpfsUri, TxHash } from "../primitives.js";
 import type { DisputeStatus } from "../enums.js";
 import type { CursorPageQuery } from "../pagination.js";
-import type { DisputeDetail, DisputeListItem } from "../views/dispute.js";
+import type {
+  AdminDisputeDetail,
+  DisputeDetail,
+  DisputeListItem,
+} from "../views/dispute.js";
 
 export type ListDisputesQuery = CursorPageQuery & {
   status?: DisputeStatus | DisputeStatus[];
@@ -49,4 +53,29 @@ export type UpdateDisputeRequest = {
 
 export type UpdateDisputeResponse = {
   dispute: DisputeDetail;
+};
+
+export type ListAdminDisputesQuery = {
+  status?: "open" | "resolved" | "all";
+  limit?: number;
+};
+
+export type ListAdminDisputesResponse = {
+  items: AdminDisputeDetail[];
+};
+
+export type ResolveDisputeRequest = {
+  kind: "PAYOUT_TO_FREELANCER" | "REFUND_TO_CLIENT" | "SPLIT";
+  freelancerAmountWei: string;
+  clientAmountWei: string;
+  resolutionNote?: string | null;
+  chainId?: number;
+  escrowContractAddress?: string;
+  onChainProjectId?: string;
+  milestoneIndex?: number;
+  resolutionTxHash?: TxHash | null;
+};
+
+export type ResolveDisputeResponse = {
+  dispute: AdminDisputeDetail;
 };

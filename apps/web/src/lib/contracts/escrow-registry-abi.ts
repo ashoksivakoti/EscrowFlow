@@ -31,6 +31,19 @@ export const escrowRegistryAbi = [
   },
   {
     type: "function",
+    name: "resolveDispute",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "projectId", type: "uint256" },
+      { name: "milestoneIndex", type: "uint256" },
+      { name: "kind", type: "uint8" },
+      { name: "freelancerAmount", type: "uint256" },
+      { name: "clientAmount", type: "uint256" },
+    ],
+    outputs: [],
+  },
+  {
+    type: "function",
     name: "getProject",
     stateMutability: "view",
     inputs: [{ name: "projectId", type: "uint256" }],
