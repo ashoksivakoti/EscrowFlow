@@ -1,11 +1,11 @@
-import type { EntityId, IpfsUri, TxHash } from "../primitives.js";
-import type { DisputeStatus } from "../enums.js";
-import type { CursorPageQuery } from "../pagination.js";
+import type { EntityId, IpfsUri, TxHash } from "../primitives";
+import type { DisputeStatus } from "../enums";
+import type { CursorPageQuery } from "../pagination";
 import type {
   AdminDisputeDetail,
   DisputeDetail,
   DisputeListItem,
-} from "../views/dispute.js";
+} from "../views/dispute";
 
 export type ListDisputesQuery = CursorPageQuery & {
   status?: DisputeStatus | DisputeStatus[];

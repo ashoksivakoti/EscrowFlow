@@ -3,11 +3,11 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import type { DashboardActionItem, DashboardRecentTransaction } from "@escrowflow/types";
 
 import { AuthShell } from "@/components/layout/auth-shell";
-import { Button } from "@/components/ui/button";
+import { Button, buttonClassName } from "@/components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { needsOnboarding } from "@/lib/auth/client-guards";
 import { useClientDashboardQuery } from "@/hooks/use-client-dashboard-query";
@@ -19,6 +19,7 @@ import { getExplorerTxUrl } from "@/lib/chains/explorer";
 export default function DashboardPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const [signingOut, setSigningOut] = useState(false);
   const { data: session, isPending: sessionLoading } = useSessionQuery();
   const meEnabled = Boolean(session?.authenticated);
   const { data: me, isPending: meLoading, isFetched: meFetched } =
@@ -56,30 +57,43 @@ export default function DashboardPage() {
   }, [session, sessionLoading, me, meFetched, router]);
 
   async function signOut() {
-    await fetch("/api/v1/auth/logout", {
-      method: "POST",
-      credentials: "include",
-    });
-    await queryClient.invalidateQueries();
-    router.replace("/login");
+    setSigningOut(true);
+    try {
+      await fetch("/api/v1/auth/logout", {
+        method: "POST",
+        credentials: "include",
+      });
+      await queryClient.invalidateQueries();
+      router.replace("/login");
+    } catch {
+      setSigningOut(false);
+    }
   }
 
   const loading =
+    signingOut ||
     sessionLoading ||
     (meEnabled && meLoading && !meFetched) ||
     (dashboardLens === "CLIENT" && clientDashboardLoading && !clientDashboard) ||
     (dashboardLens === "FREELANCER" && freelancerDashboardLoading && !freelancerDashboard);
-  const title =
-    dashboardLens === "ADMIN"
+  const title = signingOut
+    ? "Signing out"
+    : dashboardLens === "ADMIN"
       ? "Admin dashboard"
-      : 
-    dashboardLens === "FREELANCER" ? "Freelancer dashboard" : "Client dashboard";
-  const subtitle =
-    dashboardLens === "ADMIN"
-      ? "Resolve disputes and keep escrow workflow safe."
       : dashboardLens === "FREELANCER"
-      ? "Track deliveries, reviews, payouts, and disputes."
-      : "Track escrow health, pending reviews, and recent project activity.";
+        ? "Freelancer dashboard"
+        : dashboardLens === "CLIENT"
+          ? "Client dashboard"
+          : "Dashboard";
+  const subtitle = signingOut
+    ? "Redirecting to sign in…"
+    : dashboardLens === "ADMIN"
+      ? "Resolve disputes and keep escrow workflows safe."
+      : dashboardLens === "FREELANCER"
+        ? "Track deliveries, reviews, payouts, and disputes."
+        : dashboardLens === "CLIENT"
+          ? "Track escrow health, pending reviews, and recent project activity."
+          : "Loading your workspace…";
 
   return (
     <AuthShell
@@ -109,7 +123,7 @@ export default function DashboardPage() {
             </Button>
           </div>
         </Card>
-      ) : !me.roles.includes("CLIENT") ? (
+      ) : !me.roles.some((r) => r === "CLIENT" || r === "FREELANCER") ? (
         <Card className="w-full max-w-full">
           <CardHeader>
             <CardTitle>Dashboard is not available for this role</CardTitle>
@@ -162,7 +176,7 @@ export default function DashboardPage() {
             <MetricCard
               label="Total escrow locked"
               value={formatWei(clientDashboard.summary.totalEscrowLockedWei ?? "0")}
-              hint="Token smallest units"
+              hint="Smallest token units"
             />
             <MetricCard
               label="Pending milestone reviews"
@@ -266,7 +280,10 @@ export default function DashboardPage() {
                 . Roles: {me.roles.length ? me.roles.join(", ") : "—"}
               </CardDescription>
             </CardHeader>
-            <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-end">
+              <Link href="/discover" className={buttonClassName({ variant: "secondary" })}>
+                Discover projects
+              </Link>
               <Button
                 type="button"
                 variant="secondary"

@@ -93,6 +93,7 @@ Implemented in `apps/web/src/lib/ipfs` and marked server-only.
   - `IPFS_MAX_JSON_BYTES`
   - `IPFS_ALLOWED_MIME_TYPES`
   - `IPFS_UPLOAD_TIMEOUT_MS`
+  - `IPFS_ALLOW_AGREEMENT_FALLBACK`
 
 ## Integration notes
 

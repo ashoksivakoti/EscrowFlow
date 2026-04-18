@@ -96,7 +96,7 @@ export default function ProjectsPage() {
   return (
     <AuthShell
       title="Projects"
-      subtitle="Browse and manage escrow projects with role-aware filters."
+      subtitle="Search and manage escrow projects with role-aware filters and sorting."
       className="overflow-x-hidden"
       containerClassName="max-w-6xl sm:max-w-6xl"
     >
@@ -108,7 +108,7 @@ export default function ProjectsPage() {
             <CardHeader>
               <CardTitle className="text-lg sm:text-xl">Project browser</CardTitle>
               <CardDescription>
-                Search by title or wallet, filter by role and status, then drill into project details.
+                Search by title or wallet, filter by role and status, then open project details.
               </CardDescription>
             </CardHeader>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -200,7 +200,7 @@ export default function ProjectsPage() {
               <Card>
                 <EmptyState
                   title="No projects match these filters"
-                  description="Try widening the role, status, or search filters to discover more projects."
+                    description="Try widening the role, status, or search filters to see more projects."
                 />
               </Card>
             ) : (

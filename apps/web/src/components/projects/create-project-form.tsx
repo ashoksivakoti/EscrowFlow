@@ -72,6 +72,12 @@ const emptyMilestone: CreateProjectFormValues["milestones"][number] = {
   dueAtLocal: "",
 };
 
+const DEFAULT_CHAIN_ID = process.env.NEXT_PUBLIC_DEFAULT_CHAIN_ID?.trim() ?? "";
+const DEFAULT_ESCROW_ADDRESS =
+  process.env.NEXT_PUBLIC_DEFAULT_ESCROW_REGISTRY_ADDRESS?.trim() ?? "";
+const DEFAULT_TOKEN_ADDRESS =
+  process.env.NEXT_PUBLIC_DEFAULT_PAYMENT_TOKEN_ADDRESS?.trim() ?? "";
+
 function parseLocalDateTimeToIso(localDateTime: string): string {
   const date = new Date(localDateTime);
   if (Number.isNaN(date.getTime())) {
@@ -106,10 +112,10 @@ export function CreateProjectForm() {
       title: "",
       description: "",
       freelancerWalletAddress: "",
-      chainId: "",
-      escrowContractAddress: "",
+      chainId: DEFAULT_CHAIN_ID,
+      escrowContractAddress: DEFAULT_ESCROW_ADDRESS,
       onChainProjectId: "",
-      paymentTokenAddress: "",
+      paymentTokenAddress: DEFAULT_TOKEN_ADDRESS,
       milestones: [emptyMilestone],
     },
   });
@@ -190,10 +196,10 @@ export function CreateProjectForm() {
         title: "",
         description: "",
         freelancerWalletAddress: "",
-        chainId: "",
-        escrowContractAddress: "",
+        chainId: DEFAULT_CHAIN_ID,
+        escrowContractAddress: DEFAULT_ESCROW_ADDRESS,
         onChainProjectId: "",
-        paymentTokenAddress: "",
+        paymentTokenAddress: DEFAULT_TOKEN_ADDRESS,
         milestones: [emptyMilestone],
       });
       setAgreementFile(null);
@@ -336,7 +342,7 @@ export function CreateProjectForm() {
               }}
             />
             <p className="text-xs text-zinc-500 dark:text-zinc-400">
-              Uploaded to IPFS with the project record.
+              Uploaded to IPFS with the project record (size and MIME limits apply).
             </p>
           </div>
 

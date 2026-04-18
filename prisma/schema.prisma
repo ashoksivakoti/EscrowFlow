@@ -22,6 +22,8 @@ enum PlatformRole {
 
 enum ProjectStatus {
   DRAFT
+  /// Published to marketplace; no freelancer assigned yet.
+  OPEN
   AWAITING_FREELANCER
   AWAITING_ESCROW
   ACTIVE
@@ -29,6 +31,19 @@ enum ProjectStatus {
   COMPLETED
   CANCELLED
   DISPUTED
+}
+
+enum ProjectVisibility {
+  PUBLIC
+  PRIVATE
+}
+
+enum ProjectApplicationStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  WITHDRAWN
+  EXPIRED
 }
 
 enum MilestoneStatus {
@@ -124,6 +139,8 @@ model User {
 
   transactionLogs TransactionLog[] @relation("TxInitiator")
 
+  projectApplications ProjectApplication[]
+
   @@index([createdAt])
   @@map("users")
 }
@@ -177,6 +194,7 @@ model Project {
   freelancer       User?   @relation("ProjectFreelancer", fields: [freelancerUserId], references: [id], onDelete: SetNull)
 
   status      ProjectStatus @default(DRAFT)
+  visibility  ProjectVisibility @default(PRIVATE)
   title       String
   description String?       @db.Text
 
@@ -203,6 +221,7 @@ model Project {
   updatedAt DateTime @updatedAt
 
   milestones      Milestone[]
+  applications    ProjectApplication[]
   transactionLogs TransactionLog[]
   notifications   Notification[]
   reviews         Review[]
@@ -210,8 +229,32 @@ model Project {
   @@index([clientUserId, status])
   @@index([freelancerUserId, status])
   @@index([status, updatedAt])
+  @@index([status, visibility, updatedAt])
   @@index([chainId, escrowContractAddress])
   @@map("projects")
+}
+
+model ProjectApplication {
+  id String @id @default(cuid())
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  freelancerUserId String
+  freelancer       User @relation(fields: [freelancerUserId], references: [id], onDelete: Cascade)
+
+  coverLetter       String  @db.Text
+  portfolioLink     String?
+  proposedTimeline  String?
+  status            ProjectApplicationStatus @default(PENDING)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([projectId, freelancerUserId])
+  @@index([projectId, status])
+  @@index([freelancerUserId, status])
+  @@map("project_applications")
 }
 
 model Milestone {

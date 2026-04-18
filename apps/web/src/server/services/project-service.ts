@@ -1,25 +1,39 @@
-import { DisputeStatus, PlatformRole, Prisma, ProjectStatus } from "@prisma/client";
+import { DisputeStatus, PlatformRole, Prisma, ProjectStatus, ProjectVisibility } from "@prisma/client";
 import { getAddress } from "viem";
 
 import type {
   CreateProjectBody,
   ListProjectsQuery as ListProjectsInput,
 } from "@/server/validation/schemas/projects";
+import type { CreateMarketplaceProjectBody } from "@/server/validation/schemas/marketplace";
+import type { ListPublicProjectsQuery } from "@/server/validation/schemas/marketplace";
 import type {
   CreateProjectResponse,
+  CreateMarketplaceProjectResponse,
   ListProjectsResponse,
+  ListPublicProjectsResponse,
+  GetPublicProjectResponse,
+  PublicProjectSummary,
+  ProjectApplicationStatus,
   ProjectSummary,
   MilestoneSummary,
   ProjectDetail,
   ProjectDisputePreview,
   ProjectSubmissionPreview,
   ProjectTransactionHistoryItem,
-  UserPublicRef,
 } from "@escrowflow/types";
 
 import { prisma, prismaInteractiveTransactionOptions } from "@/lib/prisma";
 import { uploadFileToIpfs, uploadJsonToIpfs } from "@/lib/ipfs";
+import { getIpfsEnv } from "@/lib/ipfs/env";
+import { getContractRuntimeDefaults } from "@/lib/contracts/defaults";
+import { toUserPublicRef } from "@/server/mappers/user-public-ref";
 import { AppError } from "@/server/errors/app-error";
+import { createLogger } from "@/server/logging/logger";
+import {
+  buildPublicMarketplaceListWhere,
+  ensurePublicMarketplaceProjectRow,
+} from "@/server/services/marketplace-project-policy";
 import { notifyProjectCreated } from "@/server/services/notification-events";
 
 function normalizeWalletOrThrow(raw: string): string {
@@ -34,12 +48,17 @@ export async function createProjectForClient(
   clientUserId: string,
   payload: CreateProjectBody,
 ): Promise<CreateProjectResponse> {
+  const defaults = getContractRuntimeDefaults();
   const freelancerWallet = normalizeWalletOrThrow(payload.freelancerWalletAddress);
   const paymentTokenAddress = payload.paymentTokenAddress
     ? normalizeWalletOrThrow(payload.paymentTokenAddress)
+    : defaults.paymentTokenAddress
+      ? normalizeWalletOrThrow(defaults.paymentTokenAddress)
     : null;
   const escrowContractAddress = payload.escrowContractAddress
     ? normalizeWalletOrThrow(payload.escrowContractAddress)
+    : defaults.escrowContractAddress
+      ? normalizeWalletOrThrow(defaults.escrowContractAddress)
     : null;
 
   const freelancer = await prisma.user.findUnique({
@@ -86,10 +105,11 @@ export async function createProjectForClient(
           clientUserId,
           freelancerUserId: freelancer.id,
           status: ProjectStatus.AWAITING_ESCROW,
+          visibility: ProjectVisibility.PRIVATE,
           title: payload.title,
           description: payload.description ?? null,
           agreementIpfsUri: agreementIpfsUri ?? null,
-          chainId: payload.chainId ?? null,
+          chainId: payload.chainId ?? defaults.chainId ?? null,
           escrowContractAddress: escrowContractAddress ?? null,
           onChainProjectId: payload.onChainProjectId ?? null,
           paymentTokenAddress,
@@ -125,10 +145,84 @@ export async function createProjectForClient(
   return { project: mapProjectDetail(created) };
 }
 
-async function maybeUploadAgreement(payload: CreateProjectBody): Promise<string | null> {
+export async function createMarketplaceProjectForClient(
+  clientUserId: string,
+  payload: CreateMarketplaceProjectBody,
+): Promise<CreateMarketplaceProjectResponse> {
+  const defaults = getContractRuntimeDefaults();
+  const paymentTokenAddress = payload.paymentTokenAddress
+    ? normalizeWalletOrThrow(payload.paymentTokenAddress)
+    : defaults.paymentTokenAddress
+      ? normalizeWalletOrThrow(defaults.paymentTokenAddress)
+      : null;
+  const escrowContractAddress = payload.escrowContractAddress
+    ? normalizeWalletOrThrow(payload.escrowContractAddress)
+    : defaults.escrowContractAddress
+      ? normalizeWalletOrThrow(defaults.escrowContractAddress)
+      : null;
+
+  const agreementIpfsUri = await maybeUploadAgreement(payload);
+
+  const totalValueWei = payload.milestones
+    .reduce((acc, m) => acc + BigInt(m.amountWei), 0n)
+    .toString();
+
+  const created = await prisma.$transaction(
+    async (tx) => {
+      const project = await tx.project.create({
+        data: {
+          clientUserId,
+          freelancerUserId: null,
+          status: ProjectStatus.OPEN,
+          visibility: ProjectVisibility.PUBLIC,
+          title: payload.title,
+          description: payload.description ?? null,
+          agreementIpfsUri: agreementIpfsUri ?? null,
+          chainId: payload.chainId ?? defaults.chainId ?? null,
+          escrowContractAddress: escrowContractAddress ?? null,
+          onChainProjectId: payload.onChainProjectId ?? null,
+          paymentTokenAddress,
+          totalValueWei,
+          milestones: {
+            create: payload.milestones.map((m, index) => ({
+              sortOrder: index,
+              title: m.title,
+              description: m.description ?? null,
+              amountWei: m.amountWei,
+              dueAt: new Date(m.dueAt),
+            })),
+          },
+        },
+        include: {
+          client: { include: { profile: true } },
+          freelancer: { include: { profile: true } },
+          milestones: { orderBy: { sortOrder: "asc" } },
+        },
+      });
+      return project;
+    },
+    prismaInteractiveTransactionOptions,
+  );
+
+  void notifyProjectCreated({
+    projectId: created.id,
+    projectTitle: created.title,
+    clientUserId,
+    freelancerUserId: null,
+    marketplaceListing: true,
+  }).catch(() => undefined);
+
+  return { project: mapProjectDetail(created) };
+}
+
+type AgreementPayload = { agreement?: CreateProjectBody["agreement"] };
+
+async function maybeUploadAgreement(payload: AgreementPayload): Promise<string | null> {
   if (!payload.agreement) {
     return null;
   }
+  const logger = createLogger("project.agreement-upload");
+  const ipfsEnv = getIpfsEnv();
 
   try {
     if (payload.agreement.mode === "metadata") {
@@ -153,6 +247,12 @@ async function maybeUploadAgreement(payload: CreateProjectBody): Promise<string 
     if (error instanceof AppError) {
       throw error;
     }
+    if (ipfsEnv.IPFS_ALLOW_AGREEMENT_FALLBACK) {
+      logger.warn("Agreement IPFS upload failed; falling back without agreement URI", {
+        reason: error instanceof Error ? error.message : String(error),
+      });
+      return null;
+    }
     throw new AppError(
       "AGREEMENT_UPLOAD_FAILED",
       "Agreement upload to IPFS failed",
@@ -167,6 +267,7 @@ async function maybeUploadAgreement(payload: CreateProjectBody): Promise<string 
 function mapProjectDetail(project: {
   id: string;
   status: ProjectStatus;
+  visibility: ProjectVisibility;
   title: string;
   description: string | null;
   chainId: number | null;
@@ -230,6 +331,7 @@ function mapProjectDetail(project: {
   return {
     id: project.id,
     status: project.status,
+    visibility: project.visibility,
     title: project.title,
     description: project.description,
     chainId: project.chainId,
@@ -253,6 +355,107 @@ function mapProjectDetail(project: {
     completedAt: project.completedAt?.toISOString() ?? null,
     cancelledAt: project.cancelledAt?.toISOString() ?? null,
     createdAt: project.createdAt.toISOString(),
+  };
+}
+
+function mapPublicProjectSummary(project: {
+  id: string;
+  status: ProjectStatus;
+  visibility: ProjectVisibility;
+  title: string;
+  description: string | null;
+  totalValueWei: string | null;
+  updatedAt: Date;
+  client: {
+    id: string;
+    walletAddress: string;
+    profile: { displayName: string; avatarUrl: string | null } | null;
+  };
+  _count: { milestones: number };
+}): PublicProjectSummary {
+  return {
+    id: project.id,
+    status: project.status,
+    visibility: project.visibility,
+    title: project.title,
+    description: project.description,
+    totalValueWei: project.totalValueWei,
+    milestoneCount: project._count.milestones,
+    client: toUserPublicRef(project.client),
+    updatedAt: project.updatedAt.toISOString(),
+  };
+}
+
+export async function listPublicMarketplaceProjects(
+  query: ListPublicProjectsQuery,
+): Promise<ListPublicProjectsResponse> {
+  const limit = Math.min(query.limit ?? 24, 100);
+  const skip = query.cursor ? Number.parseInt(query.cursor, 10) || 0 : 0;
+  const sortBy = query.sortBy ?? "updatedAt";
+  const sortOrder = query.sortOrder ?? "desc";
+
+  const where = buildPublicMarketplaceListWhere(query.query);
+
+  const rows = await prisma.project.findMany({
+    where,
+    take: limit + 1,
+    skip,
+    orderBy: { [sortBy]: sortOrder },
+    include: {
+      client: { include: { profile: true } },
+      _count: { select: { milestones: true } },
+    },
+  });
+
+  const hasMore = rows.length > limit;
+  const page = rows.slice(0, limit);
+  const items = page.map((row) => mapPublicProjectSummary(row));
+  const nextCursor = hasMore ? String(skip + limit) : null;
+
+  return { items, nextCursor, hasMore };
+}
+
+export async function getPublicProjectDetail(
+  projectId: string,
+  viewerUserId?: string | null,
+): Promise<GetPublicProjectResponse> {
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    include: {
+      client: { include: { profile: true } },
+      milestones: {
+        orderBy: { sortOrder: "asc" },
+        select: { id: true, title: true, amountWei: true, dueAt: true },
+      },
+      _count: { select: { milestones: true } },
+    },
+  });
+
+  const visible = ensurePublicMarketplaceProjectRow(project);
+
+  let myApplicationStatus: ProjectApplicationStatus | null = null;
+  if (viewerUserId) {
+    const mine = await prisma.projectApplication.findUnique({
+      where: {
+        projectId_freelancerUserId: { projectId, freelancerUserId: viewerUserId },
+      },
+      select: { status: true },
+    });
+    myApplicationStatus = mine ? (mine.status as ProjectApplicationStatus) : null;
+  }
+
+  const summary = mapPublicProjectSummary(visible);
+  return {
+    project: {
+      ...summary,
+      milestones: visible.milestones.map((m) => ({
+        id: m.id,
+        title: m.title,
+        amountWei: m.amountWei,
+        dueAt: m.dueAt?.toISOString() ?? null,
+      })),
+    },
+    myApplicationStatus,
   };
 }
 
@@ -482,6 +685,7 @@ export async function getProjectDetailForUser(
 function mapProjectSummary(project: {
   id: string;
   status: ProjectStatus;
+  visibility: ProjectVisibility;
   title: string;
   chainId: number | null;
   escrowContractAddress: string | null;
@@ -513,6 +717,7 @@ function mapProjectSummary(project: {
   return {
     id: project.id,
     status: project.status,
+    visibility: project.visibility,
     title: project.title,
     chainId: project.chainId,
     escrowContractAddress: project.escrowContractAddress,
@@ -745,15 +950,3 @@ async function mapLatestSubmissionWithMetadata(submission: {
   });
 }
 
-function toUserPublicRef(user: {
-  id: string;
-  walletAddress: string;
-  profile: { displayName: string; avatarUrl: string | null } | null;
-}): UserPublicRef {
-  return {
-    id: user.id,
-    walletAddress: user.walletAddress,
-    displayName: user.profile?.displayName ?? null,
-    avatarUrl: user.profile?.avatarUrl ?? null,
-  };
-}

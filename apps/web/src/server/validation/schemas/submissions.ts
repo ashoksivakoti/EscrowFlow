@@ -4,6 +4,7 @@ const base64Schema = z
   .string()
   .trim()
   .min(1)
+  .max(35_000_000, "fileBase64 payload is too large")
   .regex(/^[A-Za-z0-9+/=]+$/, "fileBase64 must be base64 content");
 
 const submissionFileSchema = z.object({
@@ -15,7 +16,10 @@ const submissionFileSchema = z.object({
 export const createMilestoneSubmissionBodySchema = z.object({
   note: z.string().trim().min(1).max(5_000).nullable().optional(),
   externalLink: z.string().trim().url().max(2_000).nullable().optional(),
-  files: z.array(submissionFileSchema).min(1, "At least one deliverable file is required"),
+  files: z
+    .array(submissionFileSchema)
+    .min(1, "At least one deliverable file is required")
+    .max(5, "A maximum of 5 deliverable files is allowed"),
 });
 
 export type CreateMilestoneSubmissionBody = z.infer<

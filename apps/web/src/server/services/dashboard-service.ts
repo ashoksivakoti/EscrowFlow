@@ -1,4 +1,10 @@
-import { DisputeStatus, MilestoneStatus, Prisma, ProjectStatus } from "@prisma/client";
+import {
+  DisputeStatus,
+  MilestoneStatus,
+  Prisma,
+  ProjectStatus,
+  ProjectVisibility,
+} from "@prisma/client";
 import type {
   ClientDashboard,
   DashboardActionItem,
@@ -129,7 +135,7 @@ export async function buildClientDashboard(userId: string): Promise<ClientDashbo
       SELECT COALESCE(SUM(CAST("totalValueWei" AS numeric)), 0)::text AS total
       FROM "projects"
       WHERE "clientUserId" = ${userId}
-        AND "status" IN (${Prisma.join([
+        AND "status"::text IN (${Prisma.join([
           ProjectStatus.AWAITING_ESCROW,
           ProjectStatus.ACTIVE,
           ProjectStatus.ON_HOLD,
@@ -416,6 +422,7 @@ function projectSummaryInclude() {
 function mapProjectSummary(project: {
   id: string;
   status: ProjectStatus;
+  visibility: ProjectVisibility;
   title: string;
   chainId: number | null;
   escrowContractAddress: string | null;
@@ -439,6 +446,7 @@ function mapProjectSummary(project: {
   return {
     id: project.id,
     status: project.status,
+    visibility: project.visibility,
     title: project.title,
     chainId: project.chainId,
     escrowContractAddress: project.escrowContractAddress,

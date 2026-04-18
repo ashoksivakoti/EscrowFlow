@@ -3,10 +3,10 @@ import type {
   IpfsUri,
   IsoDateTimeString,
   TxHash,
-} from "../primitives.js";
-import type { DisputeStatus } from "../enums.js";
-import type { UserPublicRef } from "../profile.js";
-import type { ProjectTransactionHistoryItem } from "./project.js";
+} from "../primitives";
+import type { DisputeStatus } from "../enums";
+import type { UserPublicRef } from "../profile";
+import type { ProjectTransactionHistoryItem } from "./project";
 
 export type DisputeListItem = {
   id: EntityId;

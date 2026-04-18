@@ -4,6 +4,7 @@ const base64Schema = z
   .string()
   .trim()
   .min(1)
+  .max(35_000_000, "fileBase64 payload is too large")
   .regex(/^[A-Za-z0-9+/=]+$/, "fileBase64 must be base64 content");
 
 const disputeEvidenceFileSchema = z.object({
@@ -14,7 +15,10 @@ const disputeEvidenceFileSchema = z.object({
 
 export const createMilestoneDisputeBodySchema = z.object({
   reason: z.string().trim().min(10).max(5_000),
-  files: z.array(disputeEvidenceFileSchema).min(1, "At least one evidence file is required"),
+  files: z
+    .array(disputeEvidenceFileSchema)
+    .min(1, "At least one evidence file is required")
+    .max(5, "A maximum of 5 evidence files is allowed"),
   relatedSubmissionId: z.string().trim().min(1).nullable().optional(),
 });
 

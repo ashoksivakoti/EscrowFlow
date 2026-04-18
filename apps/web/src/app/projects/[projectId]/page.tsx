@@ -1,12 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect } from "react";
 
 import { AuthShell } from "@/components/layout/auth-shell";
 import { DisputeCreatePanel } from "@/components/projects/dispute-create-panel";
 import { MilestoneApprovalPanel } from "@/components/projects/milestone-approval-panel";
-import { Button } from "@/components/ui/button";
+import { Button, buttonClassName } from "@/components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import { needsOnboarding } from "@/lib/auth/client-guards";
@@ -53,14 +54,14 @@ export default function ProjectDetailShellPage() {
   return (
     <AuthShell
       title="Project details"
-      subtitle="Track funding, milestones, submissions, disputes, and transaction history."
+      subtitle="Track funding, milestones, submissions, disputes, and transaction history in one place."
       className="overflow-x-hidden"
       containerClassName="max-w-5xl sm:max-w-5xl"
     >
       {loading || !project ? (
         <div className="flex flex-col items-center justify-center gap-4 py-20">
           <Spinner />
-          <p className="text-sm text-zinc-600 dark:text-zinc-400">Loading project…</p>
+          <p className="text-sm text-zinc-600 dark:text-zinc-400">Loading project...</p>
         </div>
       ) : (
         <div className="flex flex-col gap-5">
@@ -71,6 +72,26 @@ export default function ProjectDetailShellPage() {
                 {project.description?.trim() ? project.description : "No description provided yet."}
               </CardDescription>
             </CardHeader>
+            {isProjectClient && project.status === "OPEN" ? (
+              <div className="mx-4 mb-4 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 dark:border-indigo-900 dark:bg-indigo-950/40 sm:mx-6">
+                <p className="text-sm font-medium text-indigo-900 dark:text-indigo-100">
+                  This project is on the marketplace.
+                </p>
+                <p className="mt-1 text-xs text-indigo-800 dark:text-indigo-200">
+                  Review freelancer applications, then accept one to assign and start escrow.
+                </p>
+                <Link
+                  href={`/projects/${project.id}/applications`}
+                  className={buttonClassName({
+                    variant: "primary",
+                    size: "sm",
+                    className: "mt-3 w-full sm:w-auto",
+                  })}
+                >
+                  Manage applications
+                </Link>
+              </div>
+            ) : null}
             <div className="grid grid-cols-1 gap-3 text-xs text-zinc-600 dark:text-zinc-400 sm:grid-cols-2 lg:grid-cols-3">
               <Info label="Status" value={prettyStatus(project.status)} />
               <Info label="Total amount" value={formatWei(project.totalValueWei ?? "0")} />
@@ -258,7 +279,7 @@ export default function ProjectDetailShellPage() {
               <CardHeader>
                 <CardTitle className="text-lg sm:text-xl">Latest submission</CardTitle>
                 <CardDescription>
-                  Most recent submission activity across all milestones.
+                  Most recent submission activity across milestones.
                 </CardDescription>
               </CardHeader>
               {project.latestSubmission ? (

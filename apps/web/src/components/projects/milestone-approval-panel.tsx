@@ -124,19 +124,19 @@ export function MilestoneApprovalPanel(props: {
 
   const statusMessage = (() => {
     if (phase === "approve_signing") {
-      return "Waiting for wallet signature to approve milestone…";
+      return "Waiting for wallet signature to approve milestone...";
     }
     if (phase === "approve_pending") {
-      return "Approval transaction submitted. Waiting for confirmation…";
+      return "Approval transaction submitted. Waiting for confirmation...";
     }
     if (phase === "approve_success") {
       return "Milestone approval confirmed.";
     }
     if (phase === "release_signing") {
-      return "Waiting for wallet signature to release payout…";
+      return "Waiting for wallet signature to release payout...";
     }
     if (phase === "release_pending") {
-      return "Payout release transaction submitted. Waiting for confirmation…";
+      return "Payout release transaction submitted. Waiting for confirmation...";
     }
     if (phase === "success") {
       return successMessage ?? "Approval and payout complete.";

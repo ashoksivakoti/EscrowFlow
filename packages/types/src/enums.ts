@@ -8,6 +8,7 @@ export type PlatformRole = (typeof PLATFORM_ROLES)[number];
 
 export const PROJECT_STATUSES = [
   "DRAFT",
+  "OPEN",
   "AWAITING_FREELANCER",
   "AWAITING_ESCROW",
   "ACTIVE",
@@ -17,6 +18,18 @@ export const PROJECT_STATUSES = [
   "DISPUTED",
 ] as const;
 export type ProjectStatus = (typeof PROJECT_STATUSES)[number];
+
+export const PROJECT_VISIBILITIES = ["PUBLIC", "PRIVATE"] as const;
+export type ProjectVisibility = (typeof PROJECT_VISIBILITIES)[number];
+
+export const PROJECT_APPLICATION_STATUSES = [
+  "PENDING",
+  "ACCEPTED",
+  "DECLINED",
+  "WITHDRAWN",
+  "EXPIRED",
+] as const;
+export type ProjectApplicationStatus = (typeof PROJECT_APPLICATION_STATUSES)[number];
 
 export const MILESTONE_STATUSES = [
   "PLANNED",

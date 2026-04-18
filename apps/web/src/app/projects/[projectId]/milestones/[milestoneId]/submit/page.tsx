@@ -129,14 +129,14 @@ export default function MilestoneSubmissionPage() {
   return (
     <AuthShell
       title="Submit milestone work"
-      subtitle="Upload deliverables, add context, and publish submission metadata to IPFS."
+      subtitle="Upload deliverables, add context, and publish signed submission metadata to IPFS."
       className="overflow-x-hidden"
       containerClassName="max-w-3xl sm:max-w-3xl"
     >
       {loading || !project || !milestone || !me ? (
         <div className="flex flex-col items-center justify-center gap-4 py-20">
           <Spinner />
-          <p className="text-sm text-zinc-600 dark:text-zinc-400">Preparing submission form…</p>
+          <p className="text-sm text-zinc-600 dark:text-zinc-400">Preparing submission form...</p>
         </div>
       ) : (
         <div className="flex flex-col gap-5">
@@ -186,6 +186,9 @@ export default function MilestoneSubmissionPage() {
                   }}
                 />
                 <div className="space-y-1">
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                    Up to 5 files are accepted per submission.
+                  </p>
                   {files.length === 0 ? (
                     <p className="text-xs text-zinc-500 dark:text-zinc-400">No files selected yet.</p>
                   ) : (
@@ -205,7 +208,7 @@ export default function MilestoneSubmissionPage() {
               {submitting ? (
                 <div className="space-y-2 rounded-xl border border-indigo-200 bg-indigo-50 p-3 dark:border-indigo-900 dark:bg-indigo-950/30">
                   <p className="text-xs font-medium text-indigo-800 dark:text-indigo-300">
-                    Uploading submission… {uploadProgressPct}%
+                    Uploading submission... {uploadProgressPct}%
                   </p>
                   <div className="h-2 rounded-full bg-indigo-100 dark:bg-indigo-900/60">
                     <div

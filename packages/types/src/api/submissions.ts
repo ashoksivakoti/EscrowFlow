@@ -1,10 +1,10 @@
-import type { IpfsUri, IsoDateTimeString } from "../primitives.js";
-import type { SubmissionStatus } from "../enums.js";
-import type { CursorPageQuery } from "../pagination.js";
+import type { IpfsUri, IsoDateTimeString } from "../primitives";
+import type { SubmissionStatus } from "../enums";
+import type { CursorPageQuery } from "../pagination";
 import type {
   SubmissionDetail,
   SubmissionListItem,
-} from "../views/submission.js";
+} from "../views/submission";
 
 export type ListSubmissionsQuery = CursorPageQuery & {
   status?: SubmissionStatus | SubmissionStatus[];

@@ -1,4 +1,4 @@
-import type { EntityId, IpfsUri, IsoDateTimeString, WalletAddress } from "./primitives.js";
+import type { EntityId, IpfsUri, IsoDateTimeString, WalletAddress } from "./primitives";
 
 /**
  * Versioned JSON payloads persisted to IPFS.

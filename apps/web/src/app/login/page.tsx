@@ -45,14 +45,14 @@ export default function LoginPage() {
   return (
     <AuthShell
       title="Sign in"
-      subtitle="Connect your wallet and sign a message. No gas fees — just verify you control the address."
+      subtitle="Connect your wallet and sign a one-time message. No gas transaction is sent."
     >
       <Card className="w-full max-w-full">
         {showSpinner ? (
           <div className="flex flex-col items-center justify-center gap-4 py-16">
             <Spinner />
             <p className="text-sm text-zinc-600 dark:text-zinc-400">
-              Checking your session…
+              Checking session and wallet state...
             </p>
           </div>
         ) : (

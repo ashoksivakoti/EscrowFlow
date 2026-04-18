@@ -1,4 +1,4 @@
-import type { IsoDateTimeString } from "./primitives.js";
+import type { IsoDateTimeString } from "./primitives";
 
 export type SortOrder = "asc" | "desc";
 

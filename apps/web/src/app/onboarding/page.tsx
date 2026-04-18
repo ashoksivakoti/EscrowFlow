@@ -29,13 +29,13 @@ export default function OnboardingPage() {
   return (
     <AuthShell
       title="Welcome aboard"
-      subtitle="Finish your profile to unlock projects, milestones, and escrow workflows."
+      subtitle="Finish your profile to unlock project creation, milestone workflows, and payouts."
     >
       {isPending || !isFetched ? (
         <div className="flex flex-col items-center justify-center gap-4 py-20">
           <Spinner />
           <p className="text-sm text-zinc-600 dark:text-zinc-400">
-            Loading your account…
+            Loading your account settings...
           </p>
         </div>
       ) : me && needsOnboarding(me) ? (

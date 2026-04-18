@@ -4,10 +4,10 @@ import type {
   IsoDateTimeString,
   WeiAmount,
   WalletAddress,
-} from "../primitives.js";
-import type { ProjectStatus } from "../enums.js";
-import type { CursorPageQuery, ListSortQuery } from "../pagination.js";
-import type { ProjectDetail, ProjectSummary } from "../views/project.js";
+} from "../primitives";
+import type { ProjectStatus } from "../enums";
+import type { CursorPageQuery, ListSortQuery } from "../pagination";
+import type { ProjectDetail, ProjectSummary } from "../views/project";
 
 export type ListProjectsQuery = CursorPageQuery &
   ListSortQuery & {

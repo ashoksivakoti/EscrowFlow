@@ -1,6 +1,6 @@
-import type { EntityId } from "../primitives.js";
-import type { CursorPageQuery } from "../pagination.js";
-import type { ReviewListItem } from "../views/review.js";
+import type { EntityId } from "../primitives";
+import type { CursorPageQuery } from "../pagination";
+import type { ReviewListItem } from "../views/review";
 
 export type ListReviewsQuery = CursorPageQuery;
 

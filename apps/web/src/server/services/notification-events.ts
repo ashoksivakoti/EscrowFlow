@@ -8,13 +8,18 @@ export async function notifyProjectCreated(input: {
   projectTitle: string;
   clientUserId: string;
   freelancerUserId: string | null;
+  /** When true, client message reflects marketplace listing (no freelancer yet). */
+  marketplaceListing?: boolean;
 }): Promise<void> {
+  const clientBody = input.marketplaceListing
+    ? `Project "${input.projectTitle}" is live on the marketplace. Freelancers can apply until you accept one.`
+    : `Project "${input.projectTitle}" has been created and is awaiting escrow funding.`;
   const notifications = [
     {
       userId: input.clientUserId,
       type: "PROJECT" as const,
-      title: "Project created",
-      body: `Project "${input.projectTitle}" has been created and is awaiting escrow funding.`,
+      title: input.marketplaceListing ? "Project posted to marketplace" : "Project created",
+      body: clientBody,
       projectId: input.projectId,
       data: { event: "PROJECT_CREATED" },
     },
@@ -32,6 +37,75 @@ export async function notifyProjectCreated(input: {
   }
 
   await createNotifications(notifications);
+}
+
+export async function notifyProjectApplicationReceived(input: {
+  projectId: string;
+  projectTitle: string;
+  clientUserId: string;
+  /** Display name, wallet, or short label for the applicant. */
+  applicantLabel: string;
+}): Promise<void> {
+  await createNotifications([
+    {
+      userId: input.clientUserId,
+      type: "PROJECT",
+      title: "New application",
+      body: `${input.applicantLabel} applied to "${input.projectTitle}". Review their proposal in applications.`,
+      projectId: input.projectId,
+      data: { event: "PROJECT_APPLICATION_RECEIVED" },
+    },
+  ]);
+}
+
+export async function notifyProjectApplicationAccepted(input: {
+  projectId: string;
+  projectTitle: string;
+  freelancerUserId: string;
+}): Promise<void> {
+  await createNotifications([
+    {
+      userId: input.freelancerUserId,
+      type: "PROJECT",
+      title: "Application accepted",
+      body: `Your application for "${input.projectTitle}" was accepted. The project is awaiting escrow funding.`,
+      projectId: input.projectId,
+      data: { event: "PROJECT_APPLICATION_ACCEPTED" },
+    },
+  ]);
+}
+
+export type ProjectApplicationDeclinedReason = "CLIENT_DECLINED" | "OTHER_CANDIDATE_ACCEPTED";
+
+const applicationDeclinedBody: Record<ProjectApplicationDeclinedReason, (title: string) => string> = {
+  CLIENT_DECLINED: (title) =>
+    `Your application for "${title}" was declined by the client.`,
+  OTHER_CANDIDATE_ACCEPTED: (title) =>
+    `Your application for "${title}" was not selected. Another applicant was accepted for this project.`,
+};
+
+/** One in-app notification per declined freelancer (explicit decline or bulk decline on accept). */
+export async function notifyProjectApplicationsDeclined(input: {
+  projectId: string;
+  projectTitle: string;
+  freelancerUserIds: string[];
+  reason: ProjectApplicationDeclinedReason;
+}): Promise<void> {
+  const uniqueIds = [...new Set(input.freelancerUserIds)];
+  if (!uniqueIds.length) {
+    return;
+  }
+  const body = applicationDeclinedBody[input.reason](input.projectTitle);
+  await createNotifications(
+    uniqueIds.map((userId) => ({
+      userId,
+      type: "PROJECT" as const,
+      title: "Application declined",
+      body,
+      projectId: input.projectId,
+      data: { event: "PROJECT_APPLICATION_DECLINED", reason: input.reason },
+    })),
+  );
 }
 
 export async function notifyProjectFunded(input: {

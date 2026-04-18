@@ -49,6 +49,30 @@ function clampPositiveDecimal(input: string): string {
   return input.trim();
 }
 
+function formatReadContractError(error: unknown): string {
+  if (error instanceof Error) {
+    const m = error.message;
+    if (/failed to fetch|networkerror|load failed/i.test(m)) {
+      return `${m} If you use a local node, start it (e.g. Hardhat on http://127.0.0.1:8545) and ensure your wallet uses the same chain.`;
+    }
+    return m;
+  }
+  return "Unknown error reading chain state.";
+}
+
+/** Human-readable hint when chain reads are unavailable (assumes 18 decimals). */
+function formatTotalWeiHint(wei: string): string | null {
+  const w = wei.trim();
+  if (!/^\d+$/.test(w)) {
+    return null;
+  }
+  try {
+    return `${formatUnits(BigInt(w), 18)} tokens (off-chain total; shown with 18 decimals until chain loads)`;
+  } catch {
+    return null;
+  }
+}
+
 export function ProjectFundingPanel(props: FundingPanelProps) {
   const queryClient = useQueryClient();
   const chainId = useChainId();
@@ -62,50 +86,59 @@ export function ProjectFundingPanel(props: FundingPanelProps) {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [amountInput, setAmountInput] = useState("");
   const [onChain, setOnChain] = useState<OnChainFundingState | null>(null);
+  const [onChainReadError, setOnChainReadError] = useState<string | null>(null);
 
   const chainMismatch = chainId !== props.chainId;
   const onChainProjectId = BigInt(props.onChainProjectId);
 
   async function refreshOnChainState(): Promise<void> {
     if (!publicClient || !address) {
+      setOnChain(null);
+      setOnChainReadError(null);
       return;
     }
-    const [projectTuple, decimals, allowance, balance] = await Promise.all([
-      publicClient.readContract({
-        address: props.escrowContractAddress,
-        abi: escrowRegistryAbi,
-        functionName: "getProject",
-        args: [onChainProjectId],
-      }),
-      publicClient.readContract({
-        address: props.tokenAddress,
-        abi: erc20Abi,
-        functionName: "decimals",
-      }),
-      publicClient.readContract({
-        address: props.tokenAddress,
-        abi: erc20Abi,
-        functionName: "allowance",
-        args: [address, props.escrowContractAddress],
-      }),
-      publicClient.readContract({
-        address: props.tokenAddress,
-        abi: erc20Abi,
-        functionName: "balanceOf",
-        args: [address],
-      }),
-    ]);
+    try {
+      const [projectTuple, decimals, allowance, balance] = await Promise.all([
+        publicClient.readContract({
+          address: props.escrowContractAddress,
+          abi: escrowRegistryAbi,
+          functionName: "getProject",
+          args: [onChainProjectId],
+        }),
+        publicClient.readContract({
+          address: props.tokenAddress,
+          abi: erc20Abi,
+          functionName: "decimals",
+        }),
+        publicClient.readContract({
+          address: props.tokenAddress,
+          abi: erc20Abi,
+          functionName: "allowance",
+          args: [address, props.escrowContractAddress],
+        }),
+        publicClient.readContract({
+          address: props.tokenAddress,
+          abi: erc20Abi,
+          functionName: "balanceOf",
+          args: [address],
+        }),
+      ]);
 
-    const totalWei = BigInt(projectTuple.totalAmount);
-    const fundedWei = BigInt(projectTuple.fundedAmount);
+      const totalWei = BigInt(projectTuple.totalAmount);
+      const fundedWei = BigInt(projectTuple.fundedAmount);
 
-    setOnChain({
-      decimals: Number(decimals),
-      totalWei,
-      fundedWei,
-      allowanceWei: BigInt(allowance),
-      balanceWei: BigInt(balance),
-    });
+      setOnChain({
+        decimals: Number(decimals),
+        totalWei,
+        fundedWei,
+        allowanceWei: BigInt(allowance),
+        balanceWei: BigInt(balance),
+      });
+      setOnChainReadError(null);
+    } catch (error) {
+      setOnChain(null);
+      setOnChainReadError(formatReadContractError(error));
+    }
   }
 
   useEffect(() => {
@@ -119,7 +152,7 @@ export function ProjectFundingPanel(props: FundingPanelProps) {
         remainingWei: 0n,
         amountWei: 0n,
         allowanceEnough: false,
-        parseError: "Loading on-chain funding state…",
+        parseError: null as string | null,
       };
     }
     const remainingWei =
@@ -156,8 +189,15 @@ export function ProjectFundingPanel(props: FundingPanelProps) {
   async function ensureAllowanceAndFund(): Promise<void> {
     setErrorMessage(null);
     setSuccessMessage(null);
-    if (!onChain || !walletClient || !publicClient || !address) {
-      setErrorMessage("Wallet is not ready yet. Try reconnecting.");
+    if (!publicClient || !address) {
+      setErrorMessage("Connect your wallet on the correct network to fund this project.");
+      return;
+    }
+    if (!onChain || !walletClient) {
+      setErrorMessage(
+        onChainReadError ??
+          "On-chain data is still loading. Wait for balances to appear, or fix the RPC connection.",
+      );
       return;
     }
     if (chainMismatch) {
@@ -248,19 +288,19 @@ export function ProjectFundingPanel(props: FundingPanelProps) {
 
   const statusMessage = (() => {
     if (phase === "approve_signing") {
-      return "Waiting for wallet signature for token approval…";
+      return "Waiting for wallet signature for token approval...";
     }
     if (phase === "approve_pending") {
-      return "Token approval transaction submitted. Waiting for confirmation…";
+      return "Token approval transaction submitted. Waiting for confirmation...";
     }
     if (phase === "approve_success") {
       return "Token approval confirmed.";
     }
     if (phase === "fund_signing") {
-      return "Waiting for wallet signature for project funding…";
+      return "Waiting for wallet signature for project funding...";
     }
     if (phase === "fund_pending") {
-      return "Funding transaction submitted. Waiting for confirmation…";
+      return "Funding transaction submitted. Waiting for confirmation...";
     }
     if (phase === "fund_success") {
       return successMessage ?? "Funding successful.";
@@ -304,13 +344,30 @@ export function ProjectFundingPanel(props: FundingPanelProps) {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        {!address ? (
+          <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-300">
+            <p className="font-medium text-zinc-900 dark:text-zinc-100">Wallet not connected</p>
+            <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
+              Connect the client wallet to load live balances, allowance, and on-chain funding status.
+            </p>
+          </div>
+        ) : null}
+
+        {onChainReadError ? (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+            <p className="font-medium">Could not read on-chain data</p>
+            <p className="mt-2 whitespace-pre-wrap break-words text-xs">{onChainReadError}</p>
+          </div>
+        ) : null}
+
+        <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-3">
           <InfoMetric
             label="Target amount"
             value={
               onChain
                 ? `${formatUnits(onChain.totalWei, onChain.decimals)} tokens`
-                : `${props.totalValueWei} (smallest units)`
+                : formatTotalWeiHint(props.totalValueWei) ??
+                  `${props.totalValueWei} wei (smallest units)`
             }
           />
           <InfoMetric
@@ -318,7 +375,9 @@ export function ProjectFundingPanel(props: FundingPanelProps) {
             value={
               onChain
                 ? `${formatUnits(onChain.fundedWei, onChain.decimals)} tokens`
-                : "Loading…"
+                : onChainReadError
+                  ? "—"
+                  : "Loading…"
             }
           />
           <InfoMetric
@@ -331,7 +390,9 @@ export function ProjectFundingPanel(props: FundingPanelProps) {
                       : 0n,
                     onChain.decimals,
                   )} tokens`
-                : "Loading…"
+                : onChainReadError
+                  ? "—"
+                  : "Loading…"
             }
           />
         </div>
@@ -408,11 +469,13 @@ export function ProjectFundingPanel(props: FundingPanelProps) {
 
 function InfoMetric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-zinc-200 bg-white px-4 py-3 dark:border-zinc-800 dark:bg-zinc-950">
+    <div className="min-w-0 rounded-xl border border-zinc-200 bg-white px-4 py-3 dark:border-zinc-800 dark:bg-zinc-950">
       <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
         {label}
       </p>
-      <p className="mt-1 text-sm font-semibold text-zinc-900 dark:text-zinc-100">{value}</p>
+      <p className="mt-1 break-words text-xs font-semibold leading-snug text-zinc-900 dark:text-zinc-100 sm:text-sm">
+        {value}
+      </p>
     </div>
   );
 }

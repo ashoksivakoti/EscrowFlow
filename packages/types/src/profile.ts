@@ -1,5 +1,5 @@
-import type { IsoDateTimeString, WalletAddress } from "./primitives.js";
-import type { PlatformRole } from "./enums.js";
+import type { IsoDateTimeString, WalletAddress } from "./primitives";
+import type { PlatformRole } from "./enums";
 
 /** Safe subset for cards and mentions (no private email unless policy allows). */
 export type UserPublicRef = {

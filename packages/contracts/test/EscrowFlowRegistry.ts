@@ -522,6 +522,40 @@ describe("EscrowFlowRegistry", function () {
       ).to.be.revertedWithCustomError(registry, "InsufficientFundingForMilestone");
     });
 
+    it("reverts submission when URI exceeds MAX_URI_BYTES", async function () {
+      const [admin, client, freelancer] = await ethers.getSigners();
+      const { registry } = await setupFundedTwoMilestoneProject(
+        admin,
+        client,
+        freelancer,
+      );
+      const longUri = "a".repeat(2049);
+
+      await expect(
+        registry.connect(freelancer).submitMilestone(1n, 0n, longUri),
+      ).to.be.revertedWithCustomError(registry, "URITooLong");
+    });
+
+    it("reverts submit/approve/release while protocol is paused", async function () {
+      const [admin, client, freelancer] = await ethers.getSigners();
+      const { registry } = await setupFundedTwoMilestoneProject(
+        admin,
+        client,
+        freelancer,
+      );
+      await registry.connect(admin).pause();
+
+      await expect(
+        registry.connect(freelancer).submitMilestone(1n, 0n, "ipfs://x"),
+      ).to.be.revertedWithCustomError(registry, "EnforcedPause");
+      await expect(
+        registry.connect(client).approveMilestone(1n, 0n),
+      ).to.be.revertedWithCustomError(registry, "EnforcedPause");
+      await expect(
+        registry.connect(client).releaseMilestone(1n, 0n),
+      ).to.be.revertedWithCustomError(registry, "EnforcedPause");
+    });
+
     it("accumulates releasedAmount across milestones", async function () {
       const [admin, client, freelancer] = await ethers.getSigners();
       const { registry, token, m0, m1, total } =
@@ -606,6 +640,47 @@ describe("EscrowFlowRegistry", function () {
       await expect(
         registry.connect(stranger).raiseDispute(1n, 0n, "ipfs://bad"),
       ).to.be.revertedWithCustomError(registry, "NotAuthorizedToRaiseDispute");
+    });
+
+    it("reverts dispute raise on non-review statuses", async function () {
+      const [admin, arb, client, freelancer] = await ethers.getSigners();
+      const registry = await deployRegistryWithArb(admin, arb);
+      const token = await deployMock(admin);
+      const amount = 100n;
+      await token.connect(admin).mint(await client.getAddress(), amount * 10n);
+
+      await registry
+        .connect(client)
+        .createProject(await freelancer.getAddress(), await token.getAddress(), "", [
+          milestone(amount, 1n),
+        ]);
+      await token.connect(client).approve(await registry.getAddress(), amount);
+      await registry.connect(client).fundProject(1n, amount);
+
+      await expect(
+        registry.connect(client).raiseDispute(1n, 0n, "ipfs://bad-status"),
+      ).to.be.revertedWithCustomError(registry, "InvalidDisputeMilestoneStatus");
+    });
+
+    it("reverts dispute raise when reason URI exceeds MAX_URI_BYTES", async function () {
+      const [admin, arb, client, freelancer] = await ethers.getSigners();
+      const registry = await deployRegistryWithArb(admin, arb);
+      const token = await deployMock(admin);
+      const amount = 100n;
+      await token.connect(admin).mint(await client.getAddress(), amount * 10n);
+
+      await registry
+        .connect(client)
+        .createProject(await freelancer.getAddress(), await token.getAddress(), "", [
+          milestone(amount, 1n),
+        ]);
+      await token.connect(client).approve(await registry.getAddress(), amount);
+      await registry.connect(client).fundProject(1n, amount);
+      await registry.connect(freelancer).submitMilestone(1n, 0n, "ipfs://work");
+
+      await expect(
+        registry.connect(client).raiseDispute(1n, 0n, "a".repeat(2049)),
+      ).to.be.revertedWithCustomError(registry, "URITooLong");
     });
 
     it("blocks approve and release on the disputed milestone", async function () {

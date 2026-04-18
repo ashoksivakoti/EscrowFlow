@@ -95,6 +95,7 @@ The same object is printed to **stdout** for CI piping.
 
 - Point `NEXT_PUBLIC_*` (or server env) at `contracts.EscrowFlowRegistry` and, for dev, `contracts.MockERC20Stablecoin`.
 - Load ABIs from `packages/contracts/artifacts/contracts/EscrowFlowRegistry.sol/EscrowFlowRegistry.json` (or TypeChain in CI).
+- The web backend can auto-read this artifact when `CONTRACTS_DEPLOYMENT_PATH` is set in `apps/web/.env.local`.
 
 **Git**
 

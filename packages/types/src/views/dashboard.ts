@@ -1,6 +1,6 @@
-import type { EntityId, IsoDateTimeString } from "../primitives.js";
-import type { NotificationListItem } from "./notification.js";
-import type { ProjectSummary } from "./project.js";
+import type { EntityId, IsoDateTimeString } from "../primitives";
+import type { NotificationListItem } from "./notification";
+import type { ProjectSummary } from "./project";
 
 export type DashboardActionKind =
   | "MILESTONE_CLIENT_REVIEW"

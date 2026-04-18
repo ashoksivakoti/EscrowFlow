@@ -32,6 +32,7 @@ export function buildSessionSetCookie(
     "Path=/",
     "HttpOnly",
     "SameSite=Lax",
+    "Priority=High",
     `Max-Age=${maxAgeSeconds}`,
   ];
   if (process.env.NODE_ENV === "production") {
@@ -46,6 +47,7 @@ export function buildSessionClearCookie(): string {
     "Path=/",
     "HttpOnly",
     "SameSite=Lax",
+    "Priority=High",
     "Max-Age=0",
   ];
   if (process.env.NODE_ENV === "production") {

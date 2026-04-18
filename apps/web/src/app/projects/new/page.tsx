@@ -1,11 +1,12 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 
 import { CreateProjectForm } from "@/components/projects/create-project-form";
 import { AuthShell } from "@/components/layout/auth-shell";
-import { Button } from "@/components/ui/button";
+import { Button, buttonClassName } from "@/components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import { needsOnboarding } from "@/lib/auth/client-guards";
@@ -45,14 +46,14 @@ export default function CreateProjectPage() {
   return (
     <AuthShell
       title="Create project"
-      subtitle="Set up a milestone escrow plan and invite your freelancer wallet."
+      subtitle="Define milestones, link optional on-chain context, and invite the freelancer wallet."
       className="overflow-x-hidden"
     >
       {loading || !me ? (
         <div className="flex flex-col items-center justify-center gap-4 py-20">
           <Spinner />
           <p className="text-sm text-zinc-600 dark:text-zinc-400">
-            Preparing project workspace…
+            Preparing project workspace...
           </p>
         </div>
       ) : !me.roles.includes("CLIENT") ? (
@@ -78,7 +79,25 @@ export default function CreateProjectPage() {
           </div>
         </Card>
       ) : (
-        <CreateProjectForm />
+        <div className="flex w-full max-w-full flex-col gap-5">
+          <Card className="w-full max-w-full border-indigo-200 bg-indigo-50/60 dark:border-indigo-900 dark:bg-indigo-950/30">
+            <CardHeader>
+              <CardTitle className="text-base sm:text-lg">Hiring via marketplace?</CardTitle>
+              <CardDescription>
+                Post a public OPEN project so freelancers can apply. You pick one, then fund escrow.
+              </CardDescription>
+            </CardHeader>
+            <div className="px-4 pb-4 sm:px-6">
+              <Link
+                href="/projects/new/marketplace"
+                className={buttonClassName({ variant: "secondary", className: "w-full sm:w-auto" })}
+              >
+                Post to marketplace
+              </Link>
+            </div>
+          </Card>
+          <CreateProjectForm />
+        </div>
       )}
     </AuthShell>
   );

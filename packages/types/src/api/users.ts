@@ -2,7 +2,7 @@ import type {
   UserWithRoles,
   UpdateProfileRequest,
   UserPublicRef,
-} from "../profile.js";
+} from "../profile";
 
 export type GetMeResponse = {
   user: UserWithRoles;

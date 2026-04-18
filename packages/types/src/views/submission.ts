@@ -1,7 +1,7 @@
-import type { EntityId, IpfsUri, IsoDateTimeString } from "../primitives.js";
-import type { SubmissionStatus } from "../enums.js";
-import type { UserPublicRef } from "../profile.js";
-import type { IpfsFileRef } from "../ipfs.js";
+import type { EntityId, IpfsUri, IsoDateTimeString } from "../primitives";
+import type { SubmissionStatus } from "../enums";
+import type { UserPublicRef } from "../profile";
+import type { IpfsFileRef } from "../ipfs";
 
 export type SubmissionListItem = {
   id: EntityId;

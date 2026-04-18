@@ -14,7 +14,7 @@ const weiAmountSchema = z
     }
   }, "amountWei must be greater than zero");
 
-const milestoneInputSchema = z.object({
+export const projectMilestoneInputSchema = z.object({
   title: z.string().trim().min(2).max(120),
   description: z.string().trim().max(5_000).nullable().optional(),
   amountWei: weiAmountSchema,
@@ -35,8 +35,14 @@ const agreementFileUploadSchema = z.object({
     .string()
     .trim()
     .min(1)
+    .max(35_000_000, "fileBase64 payload is too large")
     .regex(/^[A-Za-z0-9+/=]+$/, "fileBase64 must be base64 content"),
 });
+
+export const projectAgreementSchema = z
+  .union([agreementMetadataUploadSchema, agreementFileUploadSchema])
+  .optional()
+  .nullable();
 
 export const createProjectBodySchema = z.object({
   title: z.string().trim().min(3).max(120),
@@ -45,11 +51,8 @@ export const createProjectBodySchema = z.object({
     .string()
     .trim()
     .refine((v) => isAddress(v), "freelancerWalletAddress is not a valid wallet"),
-  milestones: z.array(milestoneInputSchema).min(1).max(50),
-  agreement: z
-    .union([agreementMetadataUploadSchema, agreementFileUploadSchema])
-    .optional()
-    .nullable(),
+  milestones: z.array(projectMilestoneInputSchema).min(1).max(50),
+  agreement: projectAgreementSchema,
   chainId: z.number().int().positive().nullable().optional(),
   escrowContractAddress: z
     .string()

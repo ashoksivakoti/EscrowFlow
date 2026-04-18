@@ -1,4 +1,4 @@
-import type { UserWithRoles } from "../profile.js";
+import type { UserWithRoles } from "../profile";
 
 export type CompleteOnboardingRequest = {
   displayName: string;

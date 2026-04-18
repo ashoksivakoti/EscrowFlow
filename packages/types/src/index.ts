@@ -6,24 +6,28 @@ export type {
   WeiAmount,
   TxHash,
   EntityId,
-} from "./primitives.js";
+} from "./primitives";
 
 export {
   PLATFORM_ROLES,
   PROJECT_STATUSES,
+  PROJECT_VISIBILITIES,
+  PROJECT_APPLICATION_STATUSES,
   MILESTONE_STATUSES,
   SUBMISSION_STATUSES,
   DISPUTE_STATUSES,
   NOTIFICATION_TYPES,
-} from "./enums.js";
+} from "./enums";
 export type {
   PlatformRole,
   ProjectStatus,
+  ProjectVisibility,
+  ProjectApplicationStatus,
   MilestoneStatus,
   SubmissionStatus,
   DisputeStatus,
   NotificationType,
-} from "./enums.js";
+} from "./enums";
 
 export type {
   SortOrder,
@@ -35,13 +39,13 @@ export type {
   OffsetPageResponse,
   ListSortQuery,
   TimeRangeQuery,
-} from "./pagination.js";
+} from "./pagination";
 
 export type {
   ApiErrorBody,
   ApiSuccessEnvelope,
   ApiErrorEnvelope,
-} from "./api-error.js";
+} from "./api-error";
 
 export type {
   AgreementMetadata,
@@ -56,7 +60,7 @@ export type {
   DisputeEvidenceManifest,
   IpfsJsonBase,
   IpfsObjectRef,
-} from "./ipfs.js";
+} from "./ipfs";
 
 export type {
   AuthNonceResponse,
@@ -66,7 +70,7 @@ export type {
   SessionResponse,
   SessionClaims,
   GetSessionResponse,
-} from "./auth.js";
+} from "./auth";
 
 export type {
   UserPublicRef,
@@ -74,9 +78,9 @@ export type {
   ProfilePrivate,
   UpdateProfileRequest,
   UserWithRoles,
-} from "./profile.js";
+} from "./profile";
 
-export type { LogoutResponse } from "./api/auth.js";
+export type { LogoutResponse } from "./api/auth";
 
 export type {
   ProjectSummary,
@@ -84,20 +88,20 @@ export type {
   ProjectSubmissionPreview,
   ProjectDisputePreview,
   ProjectTransactionHistoryItem,
-} from "./views/project.js";
-export type { MilestoneSummary, MilestoneDetail } from "./views/milestone.js";
+} from "./views/project";
+export type { MilestoneSummary, MilestoneDetail } from "./views/milestone";
 export type {
   SubmissionListItem,
   SubmissionDetail,
-} from "./views/submission.js";
+} from "./views/submission";
 export type {
   DisputeListItem,
   DisputeDetail,
   AdminDisputeDetail,
   AdminDisputeResolutionKind,
-} from "./views/dispute.js";
-export type { NotificationListItem } from "./views/notification.js";
-export type { ReviewListItem } from "./views/review.js";
+} from "./views/dispute";
+export type { NotificationListItem } from "./views/notification";
+export type { ReviewListItem } from "./views/review";
 export type {
   DashboardActionKind,
   DashboardActionItem,
@@ -107,19 +111,19 @@ export type {
   FreelancerDashboard,
   AdminDashboard,
   DashboardPayload,
-} from "./views/dashboard.js";
+} from "./views/dashboard";
 
 export type {
   GetMeResponse,
   UpdateMeProfileRequest,
   UpdateMeProfileResponse,
   GetUserPublicResponse,
-} from "./api/users.js";
+} from "./api/users";
 
 export type {
   CompleteOnboardingRequest,
   CompleteOnboardingResponse,
-} from "./api/onboarding.js";
+} from "./api/onboarding";
 
 export type {
   ListProjectsQuery,
@@ -131,7 +135,22 @@ export type {
   UpdateProjectResponse,
   AssignFreelancerRequest,
   AssignFreelancerResponse,
-} from "./api/projects.js";
+} from "./api/projects";
+
+export type {
+  PublicProjectMilestonePreview,
+  PublicProjectSummary,
+  PublicProjectDetail,
+  ListPublicProjectsQuery,
+  ListPublicProjectsResponse,
+  GetPublicProjectResponse,
+  CreateMarketplaceProjectRequest,
+  CreateMarketplaceProjectResponse,
+  ProjectApplicationDto,
+  ListProjectApplicationsResponse,
+  CreateProjectApplicationRequest,
+  CreateProjectApplicationResponse,
+} from "./api/marketplace";
 
 export type {
   ListMilestonesQuery,
@@ -143,7 +162,7 @@ export type {
   UpdateMilestoneResponse,
   ReorderMilestonesRequest,
   ReorderMilestonesResponse,
-} from "./api/milestones.js";
+} from "./api/milestones";
 
 export type {
   ListSubmissionsQuery,
@@ -153,7 +172,7 @@ export type {
   GetSubmissionResponse,
   UpdateSubmissionRequest,
   UpdateSubmissionResponse,
-} from "./api/submissions.js";
+} from "./api/submissions";
 
 export type {
   ListDisputesQuery,
@@ -167,7 +186,7 @@ export type {
   ListAdminDisputesResponse,
   ResolveDisputeRequest,
   ResolveDisputeResponse,
-} from "./api/disputes.js";
+} from "./api/disputes";
 
 export type {
   ListNotificationsQuery,
@@ -176,18 +195,18 @@ export type {
   MarkAllNotificationsReadRequest,
   MarkAllNotificationsReadResponse,
   DeleteNotificationResponse,
-} from "./api/notifications.js";
+} from "./api/notifications";
 
 export type {
   ListReviewsQuery,
   ListReviewsResponse,
   CreateReviewRequest,
   CreateReviewResponse,
-} from "./api/reviews.js";
+} from "./api/reviews";
 
 export type {
   GetDashboardQuery,
   GetDashboardResponse,
   GetClientDashboardResponse,
   GetFreelancerDashboardResponse,
-} from "./api/dashboard.js";
+} from "./api/dashboard";

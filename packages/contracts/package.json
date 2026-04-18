@@ -8,6 +8,7 @@
     "deploy:mock-token": "hardhat run scripts/deploy-mock-token.ts",
     "deploy:registry": "hardhat run scripts/deploy-registry.ts",
     "deploy:stack": "hardhat run scripts/deploy-stack.ts",
+    "mint:mock": "hardhat run scripts/mint-mock-to.ts",
     "lint": "node -e \"console.log('Solidity linting not configured yet (add solhint when needed).')\"",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },

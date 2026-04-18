@@ -83,7 +83,7 @@ export default function AdminDisputesPage() {
   return (
     <AuthShell
       title="Dispute management"
-      subtitle="Review evidence, validate payout math, and resolve disputes through on-chain or admin signer flow."
+      subtitle="Review evidence, validate payout math, and resolve disputes through on-chain or admin signer flows."
       className="overflow-x-hidden"
       containerClassName="max-w-6xl sm:max-w-6xl"
     >
@@ -126,7 +126,7 @@ export default function AdminDisputesPage() {
             <CardHeader>
               <CardTitle>No disputes found</CardTitle>
               <CardDescription>
-                No disputes match this filter at the moment.
+                No disputes match this filter right now.
               </CardDescription>
             </CardHeader>
           </Card>

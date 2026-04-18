@@ -4,11 +4,11 @@ import type {
   IsoDateTimeString,
   WeiAmount,
   WalletAddress,
-} from "../primitives.js";
-import type { ProjectStatus } from "../enums.js";
-import type { UserPublicRef } from "../profile.js";
-import type { MilestoneSummary } from "./milestone.js";
-import type { IpfsFileRef } from "../ipfs.js";
+} from "../primitives";
+import type { ProjectStatus, ProjectVisibility } from "../enums";
+import type { UserPublicRef } from "../profile";
+import type { MilestoneSummary } from "./milestone";
+import type { IpfsFileRef } from "../ipfs";
 
 export type ProjectSubmissionPreview = {
   id: EntityId;
@@ -52,6 +52,7 @@ export type ProjectTransactionHistoryItem = {
 export type ProjectSummary = {
   id: EntityId;
   status: ProjectStatus;
+  visibility: ProjectVisibility;
   title: string;
   chainId: number | null;
   escrowContractAddress: WalletAddress | null;

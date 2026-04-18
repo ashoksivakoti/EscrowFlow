@@ -38,6 +38,7 @@ describe("handleCreateProject", () => {
       project: {
         id: "project_1",
         status: "AWAITING_ESCROW",
+        visibility: "PRIVATE",
         title: "Website redesign",
         description: "Design + frontend implementation",
         chainId: null,

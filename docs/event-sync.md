@@ -34,6 +34,8 @@ Server-side environment variables (`apps/web/.env.local`):
 - `EVENT_SYNC_START_BLOCK` (optional)
 - `EVENT_SYNC_BATCH_SIZE` (optional)
 - `EVENT_SYNC_CONFIRMATIONS` (optional)
+- `EVENT_SYNC_RPC_RETRIES` (optional; default `2`)
+- `EVENT_SYNC_RPC_RETRY_DELAY_MS` (optional; default `800`)
 - `EVENT_SYNC_TRIGGER_TOKEN` (optional; recommended for production)
 
 ## Processing model
@@ -102,6 +104,18 @@ curl -X POST \
 ```
 
 If `EVENT_SYNC_TRIGGER_TOKEN` is unset, the route accepts local requests without header validation. In production, set a strong token and route this endpoint through a trusted scheduler.
+
+Scheduler command:
+
+```bash
+pnpm event-sync:trigger
+```
+
+Supporting variables:
+
+- `EVENT_SYNC_INTERNAL_URL`
+- `EVENT_SYNC_TRIGGER_RETRIES`
+- `EVENT_SYNC_TRIGGER_RETRY_DELAY_MS`
 
 ## Extending for future events
 

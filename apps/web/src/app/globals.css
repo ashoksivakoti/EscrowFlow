@@ -7,5 +7,5 @@
 }
 
 body {
-  @apply min-h-dvh bg-zinc-50 antialiased dark:bg-zinc-950;
+  @apply min-h-dvh overflow-x-hidden bg-zinc-50 antialiased dark:bg-zinc-950;
 }

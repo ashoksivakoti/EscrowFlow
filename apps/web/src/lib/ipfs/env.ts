@@ -36,6 +36,7 @@ const schema = z.object({
     )
     .pipe(z.array(z.string()).min(1)),
   IPFS_UPLOAD_TIMEOUT_MS: z.coerce.number().int().positive().max(120_000).default(30_000),
+  IPFS_ALLOW_AGREEMENT_FALLBACK: z.coerce.boolean().default(false),
 });
 
 export type IpfsEnv = z.infer<typeof schema>;
@@ -54,6 +55,7 @@ export function getIpfsEnv(): IpfsEnv {
     IPFS_MAX_JSON_BYTES: process.env.IPFS_MAX_JSON_BYTES,
     IPFS_ALLOWED_MIME_TYPES: process.env.IPFS_ALLOWED_MIME_TYPES,
     IPFS_UPLOAD_TIMEOUT_MS: process.env.IPFS_UPLOAD_TIMEOUT_MS,
+    IPFS_ALLOW_AGREEMENT_FALLBACK: process.env.IPFS_ALLOW_AGREEMENT_FALLBACK,
   });
   return cached;
 }

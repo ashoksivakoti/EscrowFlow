@@ -1,7 +1,7 @@
-import type { EntityId } from "../primitives.js";
-import type { NotificationType } from "../enums.js";
-import type { CursorPageQuery, TimeRangeQuery } from "../pagination.js";
-import type { NotificationListItem } from "../views/notification.js";
+import type { EntityId } from "../primitives";
+import type { NotificationType } from "../enums";
+import type { CursorPageQuery, TimeRangeQuery } from "../pagination";
+import type { NotificationListItem } from "../views/notification";
 
 export type ListNotificationsQuery = CursorPageQuery &
   TimeRangeQuery & {

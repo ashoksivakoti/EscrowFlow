@@ -57,13 +57,13 @@ export default function ProjectFundingPage() {
   return (
     <AuthShell
       title="Project funding"
-      subtitle="Approve token allowance and fund escrow with transparent transaction states."
+      subtitle="Approve token allowance and fund escrow with clear transaction status updates."
       className="overflow-x-hidden"
     >
       {loading || !me || !projectFetched || !project ? (
         <div className="flex flex-col items-center justify-center gap-4 py-20">
           <Spinner />
-          <p className="text-sm text-zinc-600 dark:text-zinc-400">Loading funding panel…</p>
+          <p className="text-sm text-zinc-600 dark:text-zinc-400">Loading funding panel...</p>
         </div>
       ) : !me.roles.includes("CLIENT") || project.client.id !== me.id ? (
         <Card>
@@ -80,8 +80,8 @@ export default function ProjectFundingPage() {
           <CardHeader>
             <CardTitle>Project not linked on-chain yet</CardTitle>
             <CardDescription>
-              Add chain id, escrow contract, token address, and on-chain project id during
-              project setup before funding can start.
+              Add chain ID, escrow contract, token address, and on-chain project ID
+              during setup before funding can start.
             </CardDescription>
           </CardHeader>
           <Button onClick={() => router.push("/projects/new")}>Create linked project</Button>

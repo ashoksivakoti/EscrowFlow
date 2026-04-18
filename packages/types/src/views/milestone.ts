@@ -3,10 +3,10 @@ import type {
   IpfsUri,
   IsoDateTimeString,
   WeiAmount,
-} from "../primitives.js";
-import type { MilestoneStatus } from "../enums.js";
-import type { SubmissionListItem } from "./submission.js";
-import type { DisputeListItem } from "./dispute.js";
+} from "../primitives";
+import type { MilestoneStatus } from "../enums";
+import type { SubmissionListItem } from "./submission";
+import type { DisputeListItem } from "./dispute";
 
 export type MilestoneSummary = {
   id: EntityId;

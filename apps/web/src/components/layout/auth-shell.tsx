@@ -29,11 +29,11 @@ export function AuthShell({
     >
       <div
         className={cn(
-          "mx-auto flex min-h-dvh w-full max-w-lg flex-col px-4 py-10 sm:max-w-xl sm:px-6 sm:py-16",
+          "mx-auto flex min-h-dvh w-full max-w-lg flex-col px-4 py-8 sm:max-w-xl sm:px-6 sm:py-14 lg:py-16",
           containerClassName,
         )}
       >
-        <header className="relative mb-8 flex flex-col items-center gap-3 text-center sm:mb-10">
+        <header className="relative mb-7 flex flex-col items-center gap-3 text-center sm:mb-9">
           {showNotifications ? (
             <div className="absolute right-0 top-0">
               <NotificationBell />
@@ -54,7 +54,7 @@ export function AuthShell({
             ) : null}
           </div>
         </header>
-        <main className="flex w-full min-w-0 flex-1 flex-col">{children}</main>
+        <main className="flex w-full min-w-0 flex-1 flex-col gap-4">{children}</main>
       </div>
     </div>
   );

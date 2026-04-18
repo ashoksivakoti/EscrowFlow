@@ -1,5 +1,5 @@
-import type { EntityId, IsoDateTimeString } from "../primitives.js";
-import type { NotificationType } from "../enums.js";
+import type { EntityId, IsoDateTimeString } from "../primitives";
+import type { NotificationType } from "../enums";
 
 export type NotificationListItem = {
   id: EntityId;

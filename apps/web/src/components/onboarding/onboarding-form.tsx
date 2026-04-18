@@ -113,8 +113,8 @@ export function OnboardingForm() {
       <CardHeader>
         <CardTitle>Set up your profile</CardTitle>
         <CardDescription>
-          Tell us how you plan to use EscrowFlow. You can update these details
-          later from your account.
+          Tell us how you plan to use EscrowFlow. You can update these profile
+          details later.
         </CardDescription>
       </CardHeader>
 
@@ -124,7 +124,7 @@ export function OnboardingForm() {
           role="status"
         >
           <p className="text-sm font-medium text-emerald-800 dark:text-emerald-200">
-            You are all set. Redirecting to your dashboard…
+            You are all set. Redirecting to your dashboard...
           </p>
         </div>
       ) : (
@@ -253,7 +253,7 @@ export function OnboardingForm() {
                       Freelancer
                     </span>
                     <span className="text-xs text-zinc-600 dark:text-zinc-400">
-                      I deliver milestones and receive payouts.
+                      I deliver milestones and receive milestone payouts.
                     </span>
                   </label>
                 </div>

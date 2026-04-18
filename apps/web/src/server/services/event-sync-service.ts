@@ -1,6 +1,6 @@
 import "server-only";
 
-import { ProjectStatus, Prisma } from "@prisma/client";
+import { ProjectStatus, ProjectVisibility, Prisma } from "@prisma/client";
 import { createPublicClient, http, parseAbiItem } from "viem";
 
 import { prisma } from "@/lib/prisma";
@@ -98,17 +98,22 @@ export async function syncEscrowEventsOnce(): Promise<EventSyncRunResult> {
   );
 
   try {
-    const orderedLogs = await fetchSupportedLogs(
-      client,
-      contractAddress,
-      cursor.fromBlock,
-      toBlock,
-      checkpoint
-        ? {
-            blockNumber: checkpoint.lastProcessedBlock,
-            logIndex: checkpoint.lastProcessedLogIndex,
-          }
-        : null,
+    const orderedLogs = await withRetries(
+      () =>
+        fetchSupportedLogs(
+          client,
+          contractAddress,
+          cursor.fromBlock,
+          toBlock,
+          checkpoint
+            ? {
+                blockNumber: checkpoint.lastProcessedBlock,
+                logIndex: checkpoint.lastProcessedLogIndex,
+              }
+            : null,
+        ),
+      env.EVENT_SYNC_RPC_RETRIES,
+      env.EVENT_SYNC_RPC_RETRY_DELAY_MS,
     );
     const blockTimestampCache = new Map<string, Date | null>();
 
@@ -373,6 +378,7 @@ async function syncProjectCreated(
           existing.status === ProjectStatus.AWAITING_ESCROW
             ? ProjectStatus.AWAITING_ESCROW
             : existing.status,
+        visibility: ProjectVisibility.PRIVATE,
         chainId,
         escrowContractAddress: contract,
         onChainProjectId,
@@ -402,6 +408,7 @@ async function syncProjectCreated(
       clientUserId: clientUser.id,
       freelancerUserId: freelancerUser?.id ?? null,
       status: ProjectStatus.AWAITING_ESCROW,
+      visibility: ProjectVisibility.PRIVATE,
       title: `On-chain project #${onChainProjectId}`,
       description: "Imported from on-chain event sync.",
       agreementIpfsUri: eventLog.args.metadataURI || null,
@@ -509,12 +516,40 @@ async function getBlockTimestampCached(
   if (cached !== undefined) {
     return cached;
   }
-  const block = await client.getBlock({ blockNumber });
-  const timestamp = new Date(Number(block.timestamp) * 1000);
-  cache.set(key, timestamp);
-  return timestamp;
+  try {
+    const block = await client.getBlock({ blockNumber });
+    const timestamp = new Date(Number(block.timestamp) * 1000);
+    cache.set(key, timestamp);
+    return timestamp;
+  } catch {
+    cache.set(key, null);
+    return null;
+  }
 }
 
 function minBigInt(a: bigint, b: bigint): bigint {
   return a < b ? a : b;
+}
+
+async function withRetries<T>(
+  action: () => Promise<T>,
+  retries: number,
+  delayMs: number,
+): Promise<T> {
+  let attempt = 0;
+  while (true) {
+    try {
+      return await action();
+    } catch (error) {
+      if (attempt >= retries) {
+        throw error;
+      }
+      await sleep(delayMs * (attempt + 1));
+      attempt += 1;
+    }
+  }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

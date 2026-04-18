@@ -20,12 +20,21 @@ export class AppError extends Error {
     return new AppError("UNAUTHENTICATED", message, 401);
   }
 
+  static badRequest(code: string, message: string, details?: Record<string, unknown>): AppError {
+    return new AppError(code, message, 400, details);
+  }
+
   static forbidden(message = "You do not have permission to perform this action"): AppError {
     return new AppError("FORBIDDEN", message, 403);
   }
 
   static notFound(code: string, message: string): AppError {
     return new AppError(code, message, 404);
+  }
+
+  /** State conflict (e.g. duplicate resource, invalid lifecycle transition). */
+  static conflict(code: string, message: string, details?: Record<string, unknown>): AppError {
+    return new AppError(code, message, 409, details);
   }
 }
 

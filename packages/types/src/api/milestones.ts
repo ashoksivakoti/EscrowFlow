@@ -3,10 +3,10 @@ import type {
   IpfsUri,
   IsoDateTimeString,
   WeiAmount,
-} from "../primitives.js";
-import type { MilestoneStatus } from "../enums.js";
-import type { CursorPageQuery } from "../pagination.js";
-import type { MilestoneDetail, MilestoneSummary } from "../views/milestone.js";
+} from "../primitives";
+import type { MilestoneStatus } from "../enums";
+import type { CursorPageQuery } from "../pagination";
+import type { MilestoneDetail, MilestoneSummary } from "../views/milestone";
 
 export type ListMilestonesQuery = CursorPageQuery & {
   status?: MilestoneStatus | MilestoneStatus[];

@@ -1,6 +1,6 @@
-import type { IsoDateTimeString, WalletAddress } from "./primitives.js";
-import type { PlatformRole } from "./enums.js";
-import type { ProfilePublic } from "./profile.js";
+import type { IsoDateTimeString, WalletAddress } from "./primitives";
+import type { PlatformRole } from "./enums";
+import type { ProfilePublic } from "./profile";
 
 /**
  * Wallet session after SIWE verification (opaque to clients beyond claims below).

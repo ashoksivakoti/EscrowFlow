@@ -38,8 +38,7 @@ function resolveChains(): [Chain, ...Chain[]] {
 
 const wagmiConfig = getDefaultConfig({
   appName: "EscrowFlow",
-  projectId:
-    process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID ?? "development-only",
+  projectId: resolveWalletConnectProjectId(),
   chains: resolveChains(),
   ssr: true,
 });
@@ -70,4 +69,15 @@ export function AppProviders({ children }: { children: ReactNode }) {
       </QueryClientProvider>
     </WagmiProvider>
   );
+}
+
+function resolveWalletConnectProjectId(): string {
+  const value = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID?.trim();
+  if (value) {
+    return value;
+  }
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID must be set in production");
+  }
+  return "development-only";
 }

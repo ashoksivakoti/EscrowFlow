@@ -1,5 +1,5 @@
-import type { EntityId, IsoDateTimeString } from "../primitives.js";
-import type { UserPublicRef } from "../profile.js";
+import type { EntityId, IsoDateTimeString } from "../primitives";
+import type { UserPublicRef } from "../profile";
 
 export type ReviewListItem = {
   id: EntityId;

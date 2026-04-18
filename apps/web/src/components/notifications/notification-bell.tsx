@@ -44,6 +44,7 @@ export function NotificationBell() {
         onClick={() => setOpen((v) => !v)}
         className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-zinc-300 bg-white text-zinc-700 shadow-sm transition hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
         aria-label="Open notifications"
+        aria-expanded={open}
       >
         <span aria-hidden>🔔</span>
       </button>
@@ -56,7 +57,16 @@ export function NotificationBell() {
       {open ? (
         <div className="absolute right-0 mt-2 w-[min(22rem,calc(100vw-2rem))] rounded-xl border border-zinc-200 bg-white p-3 shadow-xl dark:border-zinc-800 dark:bg-zinc-950">
           <div className="mb-2 flex items-center justify-between gap-2">
-            <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Notifications</p>
+            <div>
+              <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                Notifications
+              </p>
+              {unreadCount > 0 ? (
+                <p className="text-[10px] text-zinc-500 dark:text-zinc-400">
+                  {unreadCount} unread
+                </p>
+              ) : null}
+            </div>
             <Button type="button" size="sm" variant="secondary" onClick={() => void markAllRead()}>
               Mark all read
             </Button>
@@ -66,7 +76,7 @@ export function NotificationBell() {
             <p className="py-6 text-center text-xs text-zinc-500 dark:text-zinc-400">Loading…</p>
           ) : items.length === 0 ? (
             <p className="py-6 text-center text-xs text-zinc-500 dark:text-zinc-400">
-              No notifications yet.
+              No notifications yet. Project and milestone updates will appear here.
             </p>
           ) : (
             <div className="max-h-80 space-y-2 overflow-y-auto pr-1">

@@ -84,15 +84,19 @@ export function DisputeCreatePanel(props: {
       </p>
       <p className="mt-2 text-xs text-amber-900/90 dark:text-amber-200">
         Raising a dispute freezes approval/release actions for this milestone until review is
-        resolved. Attach evidence files to support your claim.
+        resolved. Attach evidence files to support your claim (up to 5 files).
       </p>
 
       <div className="mt-3 space-y-3">
         <div className="space-y-1">
-          <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+          <label
+            htmlFor="dispute-reason"
+            className="text-xs font-medium text-zinc-700 dark:text-zinc-300"
+          >
             Reason
           </label>
           <Textarea
+            id="dispute-reason"
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             placeholder="Describe why this milestone requires dispute review"
@@ -103,10 +107,14 @@ export function DisputeCreatePanel(props: {
         </div>
 
         <div className="space-y-1">
-          <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+          <label
+            htmlFor="dispute-evidence-files"
+            className="text-xs font-medium text-zinc-700 dark:text-zinc-300"
+          >
             Evidence files
           </label>
           <Input
+            id="dispute-evidence-files"
             type="file"
             multiple
             disabled={submitting}

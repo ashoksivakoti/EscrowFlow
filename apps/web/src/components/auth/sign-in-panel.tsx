@@ -36,7 +36,7 @@ export function SignInPanel() {
   const signIn = useCallback(async () => {
     setError(null);
     if (!address) {
-      setError("Connect a wallet first.");
+      setError("Connect your wallet first.");
       return;
     }
 
@@ -56,7 +56,7 @@ export function SignInPanel() {
       if (!allowed.includes(chainId)) {
         if (!switchChainAsync) {
           throw new Error(
-            `Switch your wallet to one of: ${allowed.join(", ")}`,
+            `Switch your wallet to one of these chain IDs: ${allowed.join(", ")}`,
           );
         }
         await switchChainAsync({ chainId: allowed[0]! });
@@ -115,7 +115,7 @@ export function SignInPanel() {
         setError(e.message);
         return;
       }
-      setError("Something went wrong. Please try again.");
+      setError("Something went wrong. Please try again in a moment.");
     }
   }, [
     address,
@@ -155,15 +155,15 @@ export function SignInPanel() {
           onClick={() => void signIn()}
         >
           {phase === "nonce" || phase === "verifying"
-            ? "Verifying…"
+            ? "Verifying..."
             : phase === "signing" || isSigning
-              ? "Sign in wallet…"
+              ? "Awaiting wallet signature..."
               : phase === "success"
-                ? "Redirecting…"
+                ? "Redirecting..."
                 : "Sign in with Ethereum"}
         </Button>
         <p className="text-center text-xs text-zinc-500 dark:text-zinc-400">
-          You will be asked to sign a one-time message. No transaction fees.
+          You will sign a one-time message. No on-chain transaction is created.
         </p>
       </div>
 
