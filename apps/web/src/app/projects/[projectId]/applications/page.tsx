@@ -166,7 +166,7 @@ export default function ProjectApplicationsPage() {
                         href={app.portfolioLink}
                         target="_blank"
                         rel="noreferrer"
-                        className="break-all text-cyan-300 hover:text-cyan-200 hover:underline"
+                        className="inline-flex min-h-8 items-center break-all rounded-md px-1.5 text-cyan-300 transition-colors hover:bg-cyan-300/10 hover:text-cyan-200"
                       >
                         Portfolio
                       </a>

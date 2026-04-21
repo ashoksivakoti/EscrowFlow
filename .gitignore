@@ -24,6 +24,7 @@ cache
 typechain-types
 
 # IDE / OS
+.cursor
 .DS_Store
 .idea
 .vscode/*

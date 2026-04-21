@@ -45,9 +45,14 @@ export function AuthShell({
           containerClassName,
         )}
       >
-        <header className="relative mb-6 flex flex-col items-center gap-3 px-5 text-center sm:mb-8 sm:px-10">
+        <header
+          className={cn(
+            "relative mb-6 flex flex-col items-center gap-3 px-5 text-center sm:mb-8 sm:px-10",
+            showNotifications ? "pr-14 sm:pr-16" : undefined,
+          )}
+        >
           {showNotifications ? (
-            <div className="absolute -top-1 right-0 sm:top-0">
+            <div className="absolute -top-1 right-0 sm:top-0 sm:right-1">
               <NotificationBell />
             </div>
           ) : null}

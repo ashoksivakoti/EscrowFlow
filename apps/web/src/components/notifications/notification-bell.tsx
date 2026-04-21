@@ -42,7 +42,7 @@ export function NotificationBell() {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-zinc-700/90 bg-gradient-to-b from-zinc-900 to-zinc-950 text-zinc-200 shadow-[0_10px_24px_-14px_rgba(0,0,0,0.95)] transition-all duration-200 hover:-translate-y-0.5 hover:border-cyan-300/35 hover:text-cyan-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/60 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950"
+        className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-zinc-700/90 bg-gradient-to-b from-zinc-900 to-zinc-950 text-zinc-200 shadow-[0_10px_24px_-14px_rgba(0,0,0,0.95)] transition-all duration-200 hover:-translate-y-0.5 hover:border-cyan-300/35 hover:text-cyan-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/60 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950"
         aria-label="Open notifications"
         aria-expanded={open}
       >
@@ -55,7 +55,7 @@ export function NotificationBell() {
       ) : null}
 
       {open ? (
-        <div className="absolute right-0 mt-2 w-[min(23rem,calc(100vw-0.75rem))] overflow-hidden rounded-2xl border border-zinc-800/90 bg-gradient-to-b from-zinc-900/95 to-zinc-950/95 p-3 shadow-[0_26px_48px_-24px_rgba(0,0,0,0.95)]">
+        <div className="absolute right-0 mt-2 w-[min(23rem,calc(100vw-1rem))] overflow-hidden rounded-2xl border border-zinc-800/90 bg-gradient-to-b from-zinc-900/95 to-zinc-950/95 p-3 shadow-[0_26px_48px_-24px_rgba(0,0,0,0.95)]">
           <div
             aria-hidden="true"
             className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-300/45 to-transparent"
@@ -102,7 +102,7 @@ export function NotificationBell() {
                       <button
                         type="button"
                         onClick={() => void markRead(item.id)}
-                        className="text-[10px] font-medium text-cyan-300 hover:text-cyan-200 hover:underline"
+                        className="inline-flex min-h-9 items-center rounded-md px-2 text-[10px] font-medium text-cyan-300 transition-colors hover:bg-cyan-300/10 hover:text-cyan-200"
                       >
                         Mark read
                       </button>
@@ -115,7 +115,7 @@ export function NotificationBell() {
                       <Link
                         href={`/projects/${item.projectId}`}
                         onClick={() => setOpen(false)}
-                        className="font-medium text-cyan-300 hover:text-cyan-200 hover:underline"
+                        className="inline-flex min-h-9 items-center rounded-md px-2 font-medium text-cyan-300 transition-colors hover:bg-cyan-300/10 hover:text-cyan-200"
                       >
                         Open
                       </Link>

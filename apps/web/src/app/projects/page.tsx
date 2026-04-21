@@ -216,7 +216,7 @@ export default function ProjectsPage() {
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
-                            <h2 className="truncate text-base font-semibold tracking-tight text-zinc-100 sm:text-[1.05rem]">
+                            <h2 className="break-words text-base font-semibold tracking-tight text-zinc-100 sm:text-[1.05rem]">
                               {project.title}
                             </h2>
                             <StatusBadge label={prettyStatus(project.status)} />

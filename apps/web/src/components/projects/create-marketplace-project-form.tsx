@@ -261,7 +261,7 @@ export function CreateMarketplaceProjectForm() {
               key={field.id}
               className="space-y-3 rounded-xl border border-zinc-800/90 bg-zinc-950/60 p-3 transition-all duration-200 hover:-translate-y-0.5 hover:border-zinc-700/90"
             >
-              <div className="flex items-center justify-between gap-2">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-sm font-medium text-zinc-100">
                   Milestone {index + 1}
                 </p>

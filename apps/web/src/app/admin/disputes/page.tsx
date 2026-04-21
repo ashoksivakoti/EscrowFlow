@@ -95,13 +95,14 @@ export default function AdminDisputesPage() {
           </CardDescription>
         </CardHeader>
         <div className="flex flex-col gap-3 border-t border-zinc-800/90 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-5">
-          <div className="flex flex-wrap gap-2">
+          <div className="grid w-full grid-cols-1 gap-2 sm:flex sm:w-auto sm:flex-wrap">
             {(["open", "resolved", "all"] as const).map((value) => (
               <Button
                 key={value}
                 type="button"
                 variant={statusFilter === value ? "primary" : "secondary"}
                 size="sm"
+                className="w-full sm:w-auto"
                 onClick={() => setStatusFilter(value)}
               >
                 {capitalize(value)}
@@ -313,7 +314,7 @@ function DisputeCard({ dispute }: { dispute: AdminDisputeDetail }) {
                 href={toGatewayUrl(link)}
                 target="_blank"
                 rel="noreferrer"
-                className="block break-all text-xs text-cyan-300 hover:text-cyan-200 hover:underline"
+                  className="inline-flex min-h-8 items-center break-all rounded-md px-1.5 text-xs text-cyan-300 transition-colors hover:bg-cyan-300/10 hover:text-cyan-200"
               >
                 {link}
               </a>
@@ -345,7 +346,7 @@ function DisputeCard({ dispute }: { dispute: AdminDisputeDetail }) {
                     href={getExplorerTxUrl(tx.chainId ?? dispute.project.chainId, tx.txHash)!}
                     target="_blank"
                     rel="noreferrer"
-                    className="mt-1 inline-block font-medium text-cyan-300 hover:text-cyan-200 hover:underline"
+                    className="mt-1 inline-flex min-h-8 items-center rounded-md px-1.5 font-medium text-cyan-300 transition-colors hover:bg-cyan-300/10 hover:text-cyan-200"
                   >
                     View on explorer
                   </a>

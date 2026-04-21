@@ -10,10 +10,10 @@ export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 type ButtonStyleOptions = Pick<ButtonProps, "variant" | "size" | "className">;
 
 export const buttonBaseClassName =
-  "inline-flex max-w-full transform-gpu items-center justify-center gap-2 whitespace-nowrap rounded-[14px] border text-sm font-semibold tracking-[0.01em] leading-none touch-manipulation transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/60 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950 disabled:pointer-events-none disabled:opacity-50 disabled:shadow-none disabled:transform-none active:translate-y-px";
+  "inline-flex max-w-full transform-gpu items-center justify-center gap-2 rounded-[14px] border px-4 text-center text-sm font-semibold tracking-[0.01em] leading-tight touch-manipulation transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/60 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950 disabled:pointer-events-none disabled:opacity-50 disabled:shadow-none disabled:transform-none active:translate-y-px sm:whitespace-nowrap";
 
 export const buttonSizeClassName = {
-  sm: "min-h-10 px-3.5 text-xs",
+  sm: "min-h-11 px-3.5 text-xs",
   md: "min-h-11 px-5 text-sm",
   lg: "min-h-12 px-6 text-base",
 } as const;

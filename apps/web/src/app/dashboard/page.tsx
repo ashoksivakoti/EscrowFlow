@@ -490,7 +490,7 @@ function ListRow({
   return (
     <div className="flex flex-col gap-3 rounded-xl border border-zinc-800/90 bg-zinc-950/45 p-3.5 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0">
-        <p className="truncate text-sm font-semibold text-zinc-100">
+        <p className="break-words text-sm font-semibold text-zinc-100">
           {title}
         </p>
         <div className="mt-1 flex flex-wrap items-center gap-2">
@@ -608,7 +608,7 @@ function TransactionList({
                 <span>•</span>
                 <Link
                   href={`/projects/${tx.projectId}`}
-                  className="font-medium text-cyan-300 hover:text-cyan-200 hover:underline"
+                  className="inline-flex min-h-8 items-center rounded-md px-1.5 font-medium text-cyan-300 transition-colors hover:bg-cyan-300/10 hover:text-cyan-200"
                 >
                   View project
                 </Link>
@@ -621,7 +621,7 @@ function TransactionList({
                   href={getExplorerTxUrl(tx.chainId, tx.txHash)!}
                   target="_blank"
                   rel="noreferrer"
-                  className="font-medium text-cyan-300 hover:text-cyan-200 hover:underline"
+                  className="inline-flex min-h-8 items-center rounded-md px-1.5 font-medium text-cyan-300 transition-colors hover:bg-cyan-300/10 hover:text-cyan-200"
                 >
                   Explorer
                 </a>
@@ -670,7 +670,7 @@ function NotificationList({
                 <span>•</span>
                 <Link
                   href={`/projects/${note.projectId}`}
-                  className="font-medium text-cyan-300 hover:text-cyan-200 hover:underline"
+                  className="inline-flex min-h-8 items-center rounded-md px-1.5 font-medium text-cyan-300 transition-colors hover:bg-cyan-300/10 hover:text-cyan-200"
                 >
                   Open project
                 </Link>

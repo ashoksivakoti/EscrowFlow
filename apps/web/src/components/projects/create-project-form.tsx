@@ -505,7 +505,10 @@ export function CreateProjectForm() {
 
           <p className="text-xs text-zinc-500 dark:text-zinc-400">
             Need a freelancer wallet first? Ask them to sign in once.{" "}
-            <Link href="/login" className="text-cyan-300 hover:text-cyan-200 hover:underline">
+            <Link
+              href="/login"
+              className="inline-flex min-h-8 items-center rounded-md px-1.5 text-cyan-300 transition-colors hover:bg-cyan-300/10 hover:text-cyan-200"
+            >
               Go to login
             </Link>
             .

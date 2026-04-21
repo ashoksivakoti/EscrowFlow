@@ -67,7 +67,7 @@ export default function ProjectDetailShellPage() {
         <div className="flex w-full max-w-full flex-col gap-5">
           <Card className="overflow-hidden">
             <CardHeader>
-              <CardTitle className="text-2xl tracking-tight sm:text-3xl">{project.title}</CardTitle>
+              <CardTitle className="break-words text-2xl tracking-tight sm:text-3xl">{project.title}</CardTitle>
               <CardDescription>
                 {project.description?.trim() ? project.description : "No description provided yet."}
               </CardDescription>
@@ -125,7 +125,7 @@ export default function ProjectDetailShellPage() {
                       href={toGatewayUrl(link)}
                       target="_blank"
                       rel="noreferrer"
-                      className="break-all text-sm text-cyan-300 hover:text-cyan-200 hover:underline"
+                      className="inline-flex min-h-8 items-center break-all rounded-md px-1.5 text-sm text-cyan-300 transition-colors hover:bg-cyan-300/10 hover:text-cyan-200"
                     >
                       {link}
                     </a>
@@ -304,7 +304,7 @@ export default function ProjectDetailShellPage() {
                         href={project.latestSubmission.externalLink}
                         target="_blank"
                         rel="noreferrer"
-                        className="break-all text-cyan-300 hover:text-cyan-200 hover:underline"
+                        className="inline-flex min-h-8 items-center break-all rounded-md px-1.5 text-cyan-300 transition-colors hover:bg-cyan-300/10 hover:text-cyan-200"
                       >
                         {project.latestSubmission.externalLink}
                       </a>
@@ -317,7 +317,7 @@ export default function ProjectDetailShellPage() {
                         href={toGatewayUrl(project.latestSubmission.metadataIpfsUri)}
                         target="_blank"
                         rel="noreferrer"
-                        className="break-all text-cyan-300 hover:text-cyan-200 hover:underline"
+                        className="inline-flex min-h-8 items-center break-all rounded-md px-1.5 text-cyan-300 transition-colors hover:bg-cyan-300/10 hover:text-cyan-200"
                       >
                         {project.latestSubmission.metadataIpfsUri}
                       </a>
@@ -335,7 +335,7 @@ export default function ProjectDetailShellPage() {
                           href={toGatewayUrl(file.uri)}
                           target="_blank"
                           rel="noreferrer"
-                          className="block break-all text-xs text-cyan-300 hover:text-cyan-200 hover:underline"
+                          className="inline-flex min-h-8 items-center break-all rounded-md px-1.5 text-xs text-cyan-300 transition-colors hover:bg-cyan-300/10 hover:text-cyan-200"
                         >
                           {file.fileName} ({formatFileSize(file.sizeBytes)})
                         </a>
@@ -406,7 +406,7 @@ export default function ProjectDetailShellPage() {
                             href={getExplorerTxUrl(tx.chainId ?? project.chainId, tx.txHash)!}
                             target="_blank"
                             rel="noreferrer"
-                            className="font-medium text-cyan-300 hover:text-cyan-200 hover:underline"
+                            className="inline-flex min-h-8 items-center rounded-md px-1.5 font-medium text-cyan-300 transition-colors hover:bg-cyan-300/10 hover:text-cyan-200"
                           >
                             View on explorer
                           </a>
