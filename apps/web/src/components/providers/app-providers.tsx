@@ -5,8 +5,8 @@ import "@/lib/polyfill-indexeddb-node";
 import "@rainbow-me/rainbowkit/styles.css";
 
 import {
+  darkTheme,
   getDefaultConfig,
-  lightTheme,
   RainbowKitProvider,
 } from "@rainbow-me/rainbowkit";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -43,10 +43,12 @@ const wagmiConfig = getDefaultConfig({
   ssr: true,
 });
 
-const rkTheme = lightTheme({
-  accentColor: "#4f46e5",
-  accentColorForeground: "white",
+const rkTheme = darkTheme({
+  accentColor: "#22d3ee",
+  accentColorForeground: "#020617",
   borderRadius: "large",
+  overlayBlur: "small",
+  fontStack: "system",
 });
 
 export function AppProviders({ children }: { children: ReactNode }) {

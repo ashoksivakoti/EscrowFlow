@@ -131,37 +131,40 @@ export default function DashboardPage() {
               Complete onboarding with a client or freelancer role to access dashboard tools.
             </CardDescription>
           </CardHeader>
-          <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
-            <Button type="button" variant="secondary" onClick={() => signOut()}>
-              Sign out
-            </Button>
+          <div className="px-4 pb-4 sm:px-6">
+            <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+              <Button type="button" variant="secondary" className="w-full sm:w-auto" onClick={() => signOut()}>
+                Sign out
+              </Button>
+            </div>
           </div>
         </Card>
       ) : dashboardLens === "CLIENT" && clientDashboard ? (
         <div className="flex w-full max-w-full flex-col gap-5">
-          <Card className="w-full max-w-full">
+          <Card className="w-full max-w-full overflow-hidden">
             <CardHeader>
-              <CardTitle>Hello, {me.displayName}</CardTitle>
+              <CardTitle className="text-2xl sm:text-3xl">Hello, {me.displayName}</CardTitle>
               <CardDescription>
                 Signed in as{" "}
-                <span className="font-mono text-xs text-zinc-700 dark:text-zinc-300">
+                <span className="inline-block break-all font-mono text-xs text-zinc-700 dark:text-zinc-300">
                   {me.walletAddress}
                 </span>
                 . Roles: {me.roles.length ? me.roles.join(", ") : "—"}
               </CardDescription>
             </CardHeader>
-            <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+            <div className="grid grid-cols-1 gap-2 border-t border-zinc-800/90 bg-gradient-to-r from-zinc-950/35 via-zinc-900/25 to-zinc-950/35 px-4 py-4 sm:flex sm:flex-row sm:flex-wrap sm:justify-end sm:px-6 sm:py-5">
               <Button
                 type="button"
                 variant="secondary"
+                className="w-full sm:w-auto"
                 onClick={() => router.push("/projects")}
               >
                 Browse projects
               </Button>
-              <Button type="button" onClick={() => router.push("/projects/new")}>
+              <Button type="button" className="w-full sm:w-auto" onClick={() => router.push("/projects/new")}>
                 Create new project
               </Button>
-              <Button type="button" variant="secondary" onClick={() => signOut()}>
+              <Button type="button" variant="secondary" className="w-full sm:w-auto" onClick={() => signOut()}>
                 Sign out
               </Button>
             </div>
@@ -195,6 +198,9 @@ export default function DashboardPage() {
             />
           </section>
 
+          <section>
+            <SectionHeader title="Execution overview" subtitle="Projects and reviews that currently need your attention." />
+          </section>
           <section className="grid grid-cols-1 gap-5 lg:grid-cols-2">
             <Card className="w-full max-w-full">
               <CardHeader>
@@ -245,6 +251,9 @@ export default function DashboardPage() {
             </Card>
           </section>
 
+          <section>
+            <SectionHeader title="Activity feed" subtitle="Recent on-chain and in-app signals for this account." />
+          </section>
           <section className="grid grid-cols-1 gap-5 lg:grid-cols-2">
             <Card className="w-full max-w-full">
               <CardHeader>
@@ -269,29 +278,30 @@ export default function DashboardPage() {
         </div>
       ) : dashboardLens === "FREELANCER" && freelancerDashboard ? (
         <div className="flex w-full max-w-full flex-col gap-5">
-          <Card className="w-full max-w-full">
+          <Card className="w-full max-w-full overflow-hidden">
             <CardHeader>
-              <CardTitle>Hello, {me.displayName}</CardTitle>
+              <CardTitle className="text-2xl sm:text-3xl">Hello, {me.displayName}</CardTitle>
               <CardDescription>
                 Signed in as{" "}
-                <span className="font-mono text-xs text-zinc-700 dark:text-zinc-300">
+                <span className="inline-block break-all font-mono text-xs text-zinc-700 dark:text-zinc-300">
                   {me.walletAddress}
                 </span>
                 . Roles: {me.roles.length ? me.roles.join(", ") : "—"}
               </CardDescription>
             </CardHeader>
-            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-end">
-              <Link href="/discover" className={buttonClassName({ variant: "secondary" })}>
+            <div className="grid grid-cols-1 gap-2 border-t border-zinc-800/90 bg-gradient-to-r from-zinc-950/35 via-zinc-900/25 to-zinc-950/35 px-4 py-4 sm:flex sm:flex-row sm:flex-wrap sm:justify-end sm:px-6 sm:py-5">
+              <Link href="/discover" className={buttonClassName({ variant: "secondary", className: "w-full sm:w-auto" })}>
                 Discover projects
               </Link>
               <Button
                 type="button"
                 variant="secondary"
+                className="w-full sm:w-auto"
                 onClick={() => router.push("/projects")}
               >
                 View assigned projects
               </Button>
-              <Button type="button" variant="secondary" onClick={() => signOut()}>
+              <Button type="button" variant="secondary" className="w-full sm:w-auto" onClick={() => signOut()}>
                 Sign out
               </Button>
             </div>
@@ -325,6 +335,9 @@ export default function DashboardPage() {
             />
           </section>
 
+          <section>
+            <SectionHeader title="Delivery workspace" subtitle="Live contracts and deadlines across your milestones." />
+          </section>
           <section className="grid grid-cols-1 gap-5 lg:grid-cols-2">
             <Card className="w-full max-w-full">
               <CardHeader>
@@ -371,6 +384,9 @@ export default function DashboardPage() {
             </Card>
           </section>
 
+          <section>
+            <SectionHeader title="Payout and alerts" subtitle="Track releases and recent account-level notifications." />
+          </section>
           <section className="grid grid-cols-1 gap-5 lg:grid-cols-2">
             <Card className="w-full max-w-full">
               <CardHeader>
@@ -424,12 +440,12 @@ function MetricCard({
   hint: string;
 }) {
   return (
-    <Card className="p-4 sm:p-5">
-      <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+    <Card className="p-4 transition-all duration-200 hover:-translate-y-0.5 sm:p-5">
+      <p className="text-xs font-medium uppercase tracking-[0.12em] text-zinc-500">
         {label}
       </p>
-      <p className="mt-2 text-xl font-semibold text-zinc-900 dark:text-zinc-100">{value}</p>
-      <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">{hint}</p>
+      <p className="mt-2 break-words text-lg font-semibold tracking-tight text-zinc-100 sm:text-xl">{value}</p>
+      <p className="mt-1 text-xs text-zinc-400">{hint}</p>
     </Card>
   );
 }
@@ -446,11 +462,11 @@ function EmptyState({
   onAction?: () => void;
 }) {
   return (
-    <div className="rounded-xl border border-dashed border-zinc-300 px-4 py-5 text-center dark:border-zinc-700">
-      <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{title}</p>
-      <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">{description}</p>
+    <div className="rounded-xl border border-dashed border-zinc-700/80 bg-zinc-950/45 px-4 py-5 text-center">
+      <p className="text-sm font-medium text-zinc-100">{title}</p>
+      <p className="mt-1 text-xs text-zinc-400">{description}</p>
       {actionLabel && onAction ? (
-        <Button className="mt-3" size="sm" onClick={onAction}>
+        <Button className="mt-3 w-full sm:w-auto" size="sm" onClick={onAction}>
           {actionLabel}
         </Button>
       ) : null}
@@ -472,17 +488,17 @@ function ListRow({
   onClick: () => void;
 }) {
   return (
-    <div className="flex flex-col gap-3 rounded-xl border border-zinc-200 p-3 dark:border-zinc-800 sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex flex-col gap-3 rounded-xl border border-zinc-800/90 bg-zinc-950/45 p-3.5 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0">
-        <p className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+        <p className="truncate text-sm font-semibold text-zinc-100">
           {title}
         </p>
         <div className="mt-1 flex flex-wrap items-center gap-2">
-          <p className="text-xs text-zinc-600 dark:text-zinc-400">{subtitle}</p>
+          <p className="break-words text-xs text-zinc-600 dark:text-zinc-400">{subtitle}</p>
           {badgeLabel ? <StatusBadge label={badgeLabel} /> : null}
         </div>
       </div>
-      <Button type="button" size="sm" variant="secondary" onClick={onClick}>
+      <Button type="button" size="sm" variant="secondary" className="w-full sm:w-auto" onClick={onClick}>
         {ctaLabel}
       </Button>
     </div>
@@ -495,21 +511,21 @@ function DashboardSkeleton() {
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
         {Array.from({ length: 5 }).map((_, index) => (
           <Card key={index} className="p-4 sm:p-5">
-            <div className="h-3 w-24 animate-pulse rounded bg-zinc-200 dark:bg-zinc-800" />
-            <div className="mt-3 h-7 w-20 animate-pulse rounded bg-zinc-200 dark:bg-zinc-800" />
-            <div className="mt-2 h-3 w-28 animate-pulse rounded bg-zinc-200 dark:bg-zinc-800" />
+            <div className="h-3 w-24 animate-pulse rounded bg-zinc-800" />
+            <div className="mt-3 h-7 w-20 animate-pulse rounded bg-zinc-800" />
+            <div className="mt-2 h-3 w-28 animate-pulse rounded bg-zinc-800" />
           </Card>
         ))}
       </div>
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         {Array.from({ length: 4 }).map((_, index) => (
           <Card key={index}>
-            <div className="h-6 w-44 animate-pulse rounded bg-zinc-200 dark:bg-zinc-800" />
+            <div className="h-6 w-44 animate-pulse rounded bg-zinc-800" />
             <div className="mt-5 space-y-3">
               {Array.from({ length: 3 }).map((__, rowIdx) => (
                 <div
                   key={rowIdx}
-                  className="h-16 animate-pulse rounded-xl bg-zinc-100 dark:bg-zinc-900"
+                  className="h-16 animate-pulse rounded-xl bg-zinc-900/80"
                 />
               ))}
             </div>
@@ -571,13 +587,13 @@ function TransactionList({
       {items.slice(0, 6).map((tx) => (
         <div
           key={`${tx.txHash}-${tx.logIndex}`}
-          className="rounded-xl border border-zinc-200 p-3 dark:border-zinc-800"
+          className="rounded-xl border border-zinc-800/90 p-3.5"
         >
-          <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{tx.eventName}</p>
+          <p className="text-sm font-semibold text-zinc-100">{tx.eventName}</p>
           <p className="mt-1 break-all font-mono text-xs text-zinc-600 dark:text-zinc-400">
             {shortHash(tx.txHash)}
           </p>
-          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-zinc-600 dark:text-zinc-400">
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs leading-relaxed text-zinc-400">
             <span>Block {tx.blockNumber}</span>
             <span>•</span>
             <span>{formatTimeAgo(tx.blockTimestamp ?? tx.createdAt)}</span>
@@ -592,7 +608,7 @@ function TransactionList({
                 <span>•</span>
                 <Link
                   href={`/projects/${tx.projectId}`}
-                  className="font-medium text-indigo-600 hover:underline dark:text-indigo-400"
+                  className="font-medium text-cyan-300 hover:text-cyan-200 hover:underline"
                 >
                   View project
                 </Link>
@@ -605,7 +621,7 @@ function TransactionList({
                   href={getExplorerTxUrl(tx.chainId, tx.txHash)!}
                   target="_blank"
                   rel="noreferrer"
-                  className="font-medium text-indigo-600 hover:underline dark:text-indigo-400"
+                  className="font-medium text-cyan-300 hover:text-cyan-200 hover:underline"
                 >
                   Explorer
                 </a>
@@ -643,18 +659,18 @@ function NotificationList({
       {items.slice(0, 5).map((note) => (
         <div
           key={note.id}
-          className="rounded-xl border border-zinc-200 p-3 dark:border-zinc-800"
+          className="rounded-xl border border-zinc-800/90 p-3.5"
         >
-          <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{note.title}</p>
-          <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">{note.body}</p>
-          <div className="mt-2 flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
+          <p className="text-sm font-semibold text-zinc-100">{note.title}</p>
+          <p className="mt-1 break-words text-xs text-zinc-600 dark:text-zinc-400">{note.body}</p>
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
             <span>{formatTimeAgo(note.createdAt)}</span>
             {note.projectId ? (
               <>
                 <span>•</span>
                 <Link
                   href={`/projects/${note.projectId}`}
-                  className="font-medium text-indigo-600 hover:underline dark:text-indigo-400"
+                  className="font-medium text-cyan-300 hover:text-cyan-200 hover:underline"
                 >
                   Open project
                 </Link>
@@ -669,9 +685,18 @@ function NotificationList({
 
 function StatusBadge({ label }: { label: string }) {
   return (
-    <span className="inline-flex items-center rounded-full border border-zinc-300 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-zinc-600 dark:border-zinc-700 dark:text-zinc-300">
+    <span className="inline-flex items-center rounded-full border border-cyan-300/30 bg-cyan-300/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-cyan-200">
       {label}
     </span>
+  );
+}
+
+function SectionHeader({ title, subtitle }: { title: string; subtitle: string }) {
+  return (
+    <div className="rounded-xl border border-zinc-800/80 bg-gradient-to-r from-zinc-950/55 via-zinc-900/45 to-zinc-950/55 px-4 py-3 sm:px-5">
+      <p className="text-sm font-semibold tracking-tight text-zinc-100">{title}</p>
+      <p className="mt-1 text-xs leading-relaxed text-zinc-400">{subtitle}</p>
+    </div>
   );
 }
 

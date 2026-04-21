@@ -119,7 +119,9 @@ describe("notification-events", () => {
     });
 
     expect(createNotifications).toHaveBeenCalledOnce();
-    const batch = vi.mocked(createNotifications).mock.calls[0][0] as Array<{ userId: string }>;
+    const firstCall = vi.mocked(createNotifications).mock.calls[0];
+    expect(firstCall).toBeDefined();
+    const batch = firstCall![0] as Array<{ userId: string }>;
     expect(batch).toHaveLength(2);
     expect(batch.map((n) => n.userId).sort()).toEqual(["freelancer_a", "freelancer_b"].sort());
     expect(batch[0]).toMatchObject({
@@ -143,7 +145,9 @@ describe("notification-events", () => {
         expect.objectContaining({ userId: "u2" }),
       ]),
     );
-    expect(vi.mocked(createNotifications).mock.calls[0][0]).toHaveLength(2);
+    const dedupeCall = vi.mocked(createNotifications).mock.calls[0];
+    expect(dedupeCall).toBeDefined();
+    expect(dedupeCall![0]).toHaveLength(2);
   });
 
   it("skips createNotifications when decline list is empty", async () => {

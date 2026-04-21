@@ -47,10 +47,22 @@ vi.mock("@/hooks/use-project-detail-query", () => ({
       id: "project_1",
       title: "Project One",
       freelancer: { id: "freelancer_1" },
-      milestones: [{ id: "milestone_1", title: "Milestone A", status: "FUNDED" }],
+      chainId: null,
+      onChainProjectId: null,
+      escrowContractAddress: null,
+      milestones: [
+        { id: "milestone_1", title: "Milestone A", status: "FUNDED", sortOrder: 0 },
+      ],
     },
     isPending: false,
   }),
+}));
+
+vi.mock("wagmi", () => ({
+  useChainId: () => 1,
+  usePublicClient: () => null,
+  useSwitchChain: () => ({ switchChainAsync: vi.fn() }),
+  useWalletClient: () => ({ data: null }),
 }));
 
 function renderWithQueryClient(node: ReactNode) {

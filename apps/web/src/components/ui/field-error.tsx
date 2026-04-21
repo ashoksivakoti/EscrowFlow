@@ -13,8 +13,14 @@ export function FieldError({
   return (
     <p
       role="alert"
-      className={cn("text-sm font-medium text-red-600 dark:text-red-400", className)}
+      className={cn(
+        "mt-1.5 inline-flex items-start gap-1.5 rounded-lg border border-red-400/30 bg-red-500/10 px-2.5 py-1.5 text-xs font-medium leading-relaxed text-red-200",
+        className,
+      )}
     >
+      <span aria-hidden="true" className="mt-[1px] text-red-300">
+        !
+      </span>
       {message}
     </p>
   );

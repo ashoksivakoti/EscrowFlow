@@ -104,33 +104,35 @@ export default function ProjectsPage() {
         <ProjectsSkeleton />
       ) : (
         <div className="flex w-full flex-col gap-5">
-          <Card>
+          <Card className="overflow-hidden">
             <CardHeader>
               <CardTitle className="text-lg sm:text-xl">Project browser</CardTitle>
               <CardDescription>
                 Search by title or wallet, filter by role and status, then open project details.
               </CardDescription>
             </CardHeader>
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-3 px-4 pb-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:px-6 sm:pb-6">
               <Button
                 type="button"
                 variant="secondary"
-                className="sm:hidden"
+                className="w-full sm:hidden"
                 onClick={() => setFiltersOpen((prev) => !prev)}
               >
                 {filtersOpen ? "Hide filters" : "Show filters"}
               </Button>
-              <div className="hidden sm:block text-xs text-zinc-500 dark:text-zinc-400">
+              <div className="hidden text-xs text-zinc-400 sm:block">
                 {items.length} project{items.length === 1 ? "" : "s"} shown
               </div>
               {me.roles.includes("CLIENT") ? (
-                <Button type="button" onClick={() => router.push("/projects/new")}>
+                <Button type="button" className="w-full sm:w-auto" onClick={() => router.push("/projects/new")}>
                   Create project
                 </Button>
               ) : null}
             </div>
 
-            <div className={`${filtersOpen ? "block" : "hidden"} mt-4 space-y-4 sm:block`}>
+            <div
+              className={`${filtersOpen ? "block" : "hidden"} border-t border-zinc-800/90 bg-gradient-to-r from-zinc-950/35 via-zinc-900/25 to-zinc-950/35 px-4 py-4 sm:block sm:px-6 sm:py-6`}
+            >
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 <div className="space-y-2">
                   <Label htmlFor="project-search">Search</Label>
@@ -145,7 +147,7 @@ export default function ProjectsPage() {
                   <Label htmlFor="project-role-filter">Role scope</Label>
                   <select
                     id="project-role-filter"
-                    className="min-h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                    className="min-h-12 w-full rounded-xl border border-zinc-800/90 bg-zinc-950/80 px-3 text-sm text-zinc-100 outline-none transition-colors focus:border-cyan-300/45"
                     value={participation}
                     onChange={(e) =>
                       setParticipation(e.target.value as "any" | "client" | "freelancer")
@@ -162,7 +164,7 @@ export default function ProjectsPage() {
                   <Label htmlFor="project-status-filter">Status</Label>
                   <select
                     id="project-status-filter"
-                    className="min-h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                    className="min-h-12 w-full rounded-xl border border-zinc-800/90 bg-zinc-950/80 px-3 text-sm text-zinc-100 outline-none transition-colors focus:border-cyan-300/45"
                     value={statusFilter}
                     onChange={(e) => setStatusFilter(e.target.value as "all" | ProjectStatus)}
                   >
@@ -178,7 +180,7 @@ export default function ProjectsPage() {
                   <Label htmlFor="project-sort">Sort by</Label>
                   <select
                     id="project-sort"
-                    className="min-h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                    className="min-h-12 w-full rounded-xl border border-zinc-800/90 bg-zinc-950/80 px-3 text-sm text-zinc-100 outline-none transition-colors focus:border-cyan-300/45"
                     value={sortOptionId}
                     onChange={(e) => setSortOptionId(e.target.value)}
                   >
@@ -209,17 +211,17 @@ export default function ProjectsPage() {
                 const total = project.milestoneCount || 0;
                 const progress = total > 0 ? Math.round((released / total) * 100) : 0;
                 return (
-                  <Card key={project.id} className="p-4 sm:p-5">
+                  <Card key={project.id} className="p-4 transition-all duration-200 hover:-translate-y-0.5 sm:p-5">
                     <div className="flex flex-col gap-4">
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
-                            <h2 className="truncate text-base font-semibold text-zinc-900 dark:text-zinc-100">
+                            <h2 className="truncate text-base font-semibold tracking-tight text-zinc-100 sm:text-[1.05rem]">
                               {project.title}
                             </h2>
                             <StatusBadge label={prettyStatus(project.status)} />
                           </div>
-                          <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
+                          <p className="mt-1 break-words text-xs leading-relaxed text-zinc-400">
                             Client: {project.client.displayName ?? shortWallet(project.client.walletAddress)} · Freelancer:{" "}
                             {project.freelancer
                               ? project.freelancer.displayName ?? shortWallet(project.freelancer.walletAddress)
@@ -230,13 +232,14 @@ export default function ProjectsPage() {
                           type="button"
                           size="sm"
                           variant="secondary"
+                          className="w-full sm:w-auto"
                           onClick={() => router.push(`/projects/${project.id}`)}
                         >
                           Open details
                         </Button>
                       </div>
 
-                      <div className="grid grid-cols-1 gap-3 text-xs text-zinc-600 dark:text-zinc-400 sm:grid-cols-2 lg:grid-cols-4">
+                      <div className="grid grid-cols-1 gap-3 text-xs text-zinc-400 sm:grid-cols-2 lg:grid-cols-4">
                         <Info label="Total amount" value={formatWei(project.totalValueWei ?? "0")} />
                         <Info label="Milestones" value={`${released}/${project.milestoneCount} released`} />
                         <Info
@@ -251,13 +254,13 @@ export default function ProjectsPage() {
                       </div>
 
                       <div className="space-y-1">
-                        <div className="flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400">
+                        <div className="flex items-center justify-between text-xs text-zinc-400">
                           <span>Milestone progress</span>
                           <span>{progress}%</span>
                         </div>
-                        <div className="h-2 rounded-full bg-zinc-200 dark:bg-zinc-800">
+                        <div className="h-2 rounded-full bg-zinc-800/90">
                           <div
-                            className="h-2 rounded-full bg-indigo-600 transition-all"
+                            className="h-2 rounded-full bg-gradient-to-r from-cyan-400 via-cyan-300 to-cyan-200 transition-all"
                             style={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
                           />
                         </div>
@@ -276,25 +279,25 @@ export default function ProjectsPage() {
 
 function Info({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-zinc-200 px-3 py-2 dark:border-zinc-800">
-      <p className="text-[10px] uppercase tracking-wide">{label}</p>
-      <p className="mt-1 text-sm font-medium text-zinc-800 dark:text-zinc-200">{value}</p>
+    <div className="rounded-xl border border-zinc-800/90 bg-zinc-950/60 px-3 py-2">
+      <p className="text-[10px] uppercase tracking-wide text-zinc-500">{label}</p>
+      <p className="mt-1 break-words text-sm font-medium text-zinc-200">{value}</p>
     </div>
   );
 }
 
 function EmptyState({ title, description }: { title: string; description: string }) {
   return (
-    <div className="rounded-xl border border-dashed border-zinc-300 px-4 py-8 text-center dark:border-zinc-700">
-      <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{title}</p>
-      <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">{description}</p>
+    <div className="rounded-xl border border-dashed border-zinc-700/80 bg-zinc-950/50 px-4 py-8 text-center">
+      <p className="text-sm font-medium text-zinc-100">{title}</p>
+      <p className="mt-1 text-xs text-zinc-400">{description}</p>
     </div>
   );
 }
 
 function StatusBadge({ label }: { label: string }) {
   return (
-    <span className="inline-flex items-center rounded-full border border-zinc-300 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-zinc-600 dark:border-zinc-700 dark:text-zinc-300">
+    <span className="inline-flex items-center rounded-full border border-cyan-300/30 bg-cyan-300/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-cyan-200">
       {label}
     </span>
   );

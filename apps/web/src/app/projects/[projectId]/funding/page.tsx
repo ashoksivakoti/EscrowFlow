@@ -6,6 +6,7 @@ import { isAddress } from "viem";
 
 import { AuthShell } from "@/components/layout/auth-shell";
 import { ProjectFundingPanel } from "@/components/projects/project-funding-panel";
+import { ProjectOnChainCreatePanel } from "@/components/projects/project-on-chain-create-panel";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
@@ -54,6 +55,21 @@ export default function ProjectFundingPage() {
     Boolean(project?.onChainProjectId) &&
     Boolean(project?.totalValueWei);
 
+  const hasOnChainTargets =
+    Boolean(project?.chainId) &&
+    Boolean(project?.escrowContractAddress && isAddress(project.escrowContractAddress)) &&
+    Boolean(project?.paymentTokenAddress && isAddress(project.paymentTokenAddress)) &&
+    Boolean(project?.totalValueWei);
+
+  const canCreateOnChainEscrow = Boolean(
+    project &&
+      hasOnChainTargets &&
+      !project.onChainProjectId &&
+      project.status === "AWAITING_ESCROW" &&
+      project.freelancer &&
+      project.milestones.length > 0,
+  );
+
   return (
     <AuthShell
       title="Project funding"
@@ -73,19 +89,37 @@ export default function ProjectFundingPage() {
               Only the project owner can approve token allowance and fund escrow.
             </CardDescription>
           </CardHeader>
-          <Button onClick={() => router.push("/dashboard")}>Back to dashboard</Button>
+          <div className="px-4 pb-4 sm:px-6">
+            <Button className="w-full sm:w-auto" onClick={() => router.push("/dashboard")}>
+              Back to dashboard
+            </Button>
+          </div>
         </Card>
       ) : !hasFundingBinding ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Project not linked on-chain yet</CardTitle>
-            <CardDescription>
-              Add chain ID, escrow contract, token address, and on-chain project ID
-              during setup before funding can start.
-            </CardDescription>
-          </CardHeader>
-          <Button onClick={() => router.push("/projects/new")}>Create linked project</Button>
-        </Card>
+        canCreateOnChainEscrow ? (
+          <ProjectOnChainCreatePanel project={project} />
+        ) : (
+          <Card>
+            <CardHeader>
+              <CardTitle>Project not linked on-chain yet</CardTitle>
+              <CardDescription>
+                {!hasOnChainTargets
+                  ? "Add chain ID, escrow contract, token address, and milestones with totals before funding can start. You can set these when posting to the marketplace or on the direct create flow."
+                  : project.status === "OPEN" || !project.freelancer
+                    ? "Escrow is created on-chain only after a freelancer is assigned. Accept an applicant from the project page, then return here to create the registry project with your wallet."
+                    : "On-chain registry details are incomplete, or the project is not in the awaiting-escrow state. Check project settings or create a new linked listing."}
+              </CardDescription>
+            </CardHeader>
+            <div className="flex flex-col gap-2 px-4 pb-6 sm:flex-row sm:flex-wrap sm:px-6">
+              <Button type="button" className="w-full sm:w-auto" onClick={() => router.push(`/projects/${project.id}`)}>
+                Back to project
+              </Button>
+              <Button type="button" variant="secondary" className="w-full sm:w-auto" onClick={() => router.push("/projects/new")}>
+                Create linked project
+              </Button>
+            </div>
+          </Card>
+        )
       ) : (
         <ProjectFundingPanel
           projectId={project.id}

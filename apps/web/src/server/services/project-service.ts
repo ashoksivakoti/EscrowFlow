@@ -215,6 +215,76 @@ export async function createMarketplaceProjectForClient(
   return { project: mapProjectDetail(created) };
 }
 
+/**
+ * After the client calls `EscrowFlowRegistry.createProject` on-chain, persist the returned
+ * project id so funding and milestone actions can target the registry.
+ */
+export async function confirmOnChainProjectBinding(
+  clientUserId: string,
+  projectId: string,
+  onChainProjectId: string,
+): Promise<ProjectDetail> {
+  await prisma.$transaction(async (tx) => {
+    const row = await tx.project.findUnique({
+      where: { id: projectId },
+      select: {
+        id: true,
+        clientUserId: true,
+        status: true,
+        chainId: true,
+        escrowContractAddress: true,
+        paymentTokenAddress: true,
+        totalValueWei: true,
+        onChainProjectId: true,
+        freelancerUserId: true,
+      },
+    });
+
+    if (!row) {
+      throw AppError.notFound("PROJECT_NOT_FOUND", "Project not found");
+    }
+    if (row.clientUserId !== clientUserId) {
+      throw AppError.forbidden("Only the project client can link the on-chain escrow");
+    }
+    if (row.onChainProjectId) {
+      throw AppError.conflict(
+        "ON_CHAIN_PROJECT_ALREADY_LINKED",
+        "This project already has an on-chain project id",
+      );
+    }
+    if (row.status !== ProjectStatus.AWAITING_ESCROW) {
+      throw AppError.badRequest(
+        "INVALID_PROJECT_STATUS",
+        "On-chain escrow can only be linked while the project is awaiting escrow funding",
+      );
+    }
+    if (!row.freelancerUserId) {
+      throw AppError.badRequest(
+        "FREELANCER_REQUIRED",
+        "Assign and accept a freelancer before creating the on-chain escrow project",
+      );
+    }
+    if (!row.chainId || !row.escrowContractAddress || !row.paymentTokenAddress || !row.totalValueWei) {
+      throw AppError.badRequest(
+        "MISSING_ESCROW_CONTEXT",
+        "Chain id, escrow contract, payment token, and milestone totals must be set before linking",
+      );
+    }
+
+    const milestoneCount = await tx.milestone.count({ where: { projectId } });
+    if (milestoneCount === 0) {
+      throw AppError.badRequest("MILESTONES_REQUIRED", "Add at least one milestone before linking");
+    }
+
+    await tx.project.update({
+      where: { id: projectId },
+      data: { onChainProjectId },
+    });
+  });
+
+  return getProjectDetailForUser(projectId, clientUserId);
+}
+
 type AgreementPayload = { agreement?: CreateProjectBody["agreement"] };
 
 async function maybeUploadAgreement(payload: AgreementPayload): Promise<string | null> {
@@ -630,7 +700,10 @@ export async function getProjectDetailForUser(
           MAX(
             CASE
               WHEN tl."eventName" = 'ProjectFunded'
-                THEN NULLIF(tl."payload"->>'fundedAmountAfter', '')::numeric
+                THEN COALESCE(
+                  NULLIF(tl."payload"->>'fundedAmountAfter', '')::numeric,
+                  NULLIF(tl."payload"->>'fundedAmountWei', '')::numeric
+                )
               ELSE NULL
             END
           ),

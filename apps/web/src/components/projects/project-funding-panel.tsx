@@ -12,6 +12,7 @@ import {
 } from "wagmi";
 
 import { escrowRegistryAbi } from "@/lib/contracts/escrow-registry-abi";
+import { estimateCappedWriteGas } from "@/lib/contracts/safe-write-gas";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { FieldError } from "@/components/ui/field-error";
@@ -222,13 +223,25 @@ export function ProjectFundingPanel(props: FundingPanelProps) {
     }
 
     try {
+      const account = walletClient.account.address;
+
       if (!derived.allowanceEnough) {
         setPhase("approve_signing");
+        const approveArgs = [props.escrowContractAddress, derived.amountWei] as const;
+        const approveGas = await estimateCappedWriteGas({
+          publicClient,
+          account,
+          address: props.tokenAddress,
+          abi: erc20Abi,
+          functionName: "approve",
+          args: approveArgs,
+        });
         const approveHash = await walletClient.writeContract({
           address: props.tokenAddress,
           abi: erc20Abi,
           functionName: "approve",
-          args: [props.escrowContractAddress, derived.amountWei],
+          args: approveArgs,
+          gas: approveGas,
           chain: walletClient.chain,
           account: walletClient.account,
         });
@@ -238,11 +251,21 @@ export function ProjectFundingPanel(props: FundingPanelProps) {
       }
 
       setPhase("fund_signing");
+      const fundArgs = [onChainProjectId, derived.amountWei] as const;
+      const fundGas = await estimateCappedWriteGas({
+        publicClient,
+        account,
+        address: props.escrowContractAddress,
+        abi: escrowRegistryAbi,
+        functionName: "fundProject",
+        args: fundArgs,
+      });
       const fundHash = await walletClient.writeContract({
         address: props.escrowContractAddress,
         abi: escrowRegistryAbi,
         functionName: "fundProject",
-        args: [onChainProjectId, derived.amountWei],
+        args: fundArgs,
+        gas: fundGas,
         chain: walletClient.chain,
         account: walletClient.account,
       });
@@ -321,12 +344,18 @@ export function ProjectFundingPanel(props: FundingPanelProps) {
         </CardDescription>
       </CardHeader>
 
-      <div className="flex flex-col gap-5">
-        <div className="rounded-xl border border-zinc-200 bg-zinc-50/70 p-4 dark:border-zinc-800 dark:bg-zinc-900/60">
-          <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+      <div className="flex flex-col gap-5 px-4 pb-6 sm:px-6">
+        <div className="rounded-xl border border-zinc-800/80 bg-zinc-950/45 px-3 py-3 sm:px-4">
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-cyan-200">Funding workspace</p>
+          <p className="mt-1 text-xs text-zinc-400">
+            Approve token allowance if needed, then fund the remaining escrow amount.
+          </p>
+        </div>
+        <div className="rounded-xl border border-zinc-800/90 bg-zinc-950/60 p-4">
+          <p className="break-words text-sm font-semibold tracking-tight text-zinc-100">
             {props.projectTitle}
           </p>
-          <div className="mt-3 grid grid-cols-1 gap-2 text-sm text-zinc-700 dark:text-zinc-300 sm:grid-cols-2">
+          <div className="mt-3 grid grid-cols-1 gap-2 text-sm text-zinc-300 sm:grid-cols-2">
             <p>
               <span className="font-medium">Chain:</span> {props.chainId}
             </p>
@@ -345,22 +374,22 @@ export function ProjectFundingPanel(props: FundingPanelProps) {
         </div>
 
         {!address ? (
-          <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-300">
-            <p className="font-medium text-zinc-900 dark:text-zinc-100">Wallet not connected</p>
-            <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
+          <div className="rounded-xl border border-zinc-800/90 bg-zinc-950/70 px-4 py-3 text-sm text-zinc-300">
+            <p className="font-medium text-zinc-100">Wallet not connected</p>
+            <p className="mt-1 text-xs text-zinc-400">
               Connect the client wallet to load live balances, allowance, and on-chain funding status.
             </p>
           </div>
         ) : null}
 
         {onChainReadError ? (
-          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+          <div className="rounded-xl border border-amber-300/35 bg-amber-300/10 px-4 py-3 text-sm text-amber-100">
             <p className="font-medium">Could not read on-chain data</p>
             <p className="mt-2 whitespace-pre-wrap break-words text-xs">{onChainReadError}</p>
           </div>
         ) : null}
 
-        <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <InfoMetric
             label="Target amount"
             value={
@@ -398,12 +427,12 @@ export function ProjectFundingPanel(props: FundingPanelProps) {
         </div>
 
         {chainMismatch ? (
-          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300">
+          <div className="rounded-xl border border-amber-300/35 bg-amber-300/10 px-4 py-3 text-sm text-amber-100">
             <p>Wallet network mismatch. Switch to chain {props.chainId} to continue.</p>
             <Button
               type="button"
               variant="secondary"
-              className="mt-3"
+              className="mt-3 w-full sm:w-auto"
               onClick={() => {
                 void switchChainAsync({ chainId: props.chainId });
               }}
@@ -416,7 +445,7 @@ export function ProjectFundingPanel(props: FundingPanelProps) {
         <div className="space-y-2">
           <label
             htmlFor="fund-amount"
-            className="text-sm font-medium text-zinc-700 dark:text-zinc-300"
+            className="text-sm font-medium text-zinc-200"
           >
             Funding amount (human token units)
           </label>
@@ -428,7 +457,7 @@ export function ProjectFundingPanel(props: FundingPanelProps) {
             onChange={(e) => setAmountInput(e.target.value)}
             disabled={isBusy}
           />
-          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+          <p className="text-xs leading-relaxed text-zinc-400">
             Enter the amount in normal token units. We convert decimals correctly
             before sending to chain.
           </p>
@@ -438,8 +467,8 @@ export function ProjectFundingPanel(props: FundingPanelProps) {
           <div
             className={`rounded-xl border px-4 py-3 text-sm ${
               phase === "failure"
-                ? "border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300"
-                : "border-indigo-200 bg-indigo-50 text-indigo-800 dark:border-indigo-900 dark:bg-indigo-950/40 dark:text-indigo-300"
+                ? "border-red-300/35 bg-red-300/10 text-red-100"
+                : "border-cyan-300/30 bg-cyan-300/10 text-cyan-100"
             }`}
             role="status"
           >
@@ -451,6 +480,7 @@ export function ProjectFundingPanel(props: FundingPanelProps) {
 
         <Button
           type="button"
+          className="w-full"
           disabled={isBusy || !onChain}
           onClick={() => {
             void ensureAllowanceAndFund();
@@ -469,11 +499,11 @@ export function ProjectFundingPanel(props: FundingPanelProps) {
 
 function InfoMetric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="min-w-0 rounded-xl border border-zinc-200 bg-white px-4 py-3 dark:border-zinc-800 dark:bg-zinc-950">
-      <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+    <div className="min-w-0 rounded-xl border border-zinc-800/90 bg-zinc-950/65 px-4 py-3">
+      <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
         {label}
       </p>
-      <p className="mt-1 break-words text-xs font-semibold leading-snug text-zinc-900 dark:text-zinc-100 sm:text-sm">
+      <p className="mt-1 break-words text-xs font-semibold leading-snug text-zinc-100 sm:text-sm">
         {value}
       </p>
     </div>

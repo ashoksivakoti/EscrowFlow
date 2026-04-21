@@ -16,6 +16,18 @@ export default {
           "sans-serif",
         ],
       },
+      colors: {
+        // Premium palette
+        black: '#000000',
+        nearBlack: '#0a0a0a',
+        aqua: '#00ffff',
+        aquaDark: '#00e6e6',
+        white: '#ffffff',
+        // Text colors
+        textPrimary: '#ffffff',
+        textSecondary: '#f0f0f0',
+        textMuted: '#c0c0c0',
+      },
     },
   },
   plugins: [],

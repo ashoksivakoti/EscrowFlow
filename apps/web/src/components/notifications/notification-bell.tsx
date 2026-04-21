@@ -42,73 +42,80 @@ export function NotificationBell() {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-zinc-300 bg-white text-zinc-700 shadow-sm transition hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+        className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-zinc-700/90 bg-gradient-to-b from-zinc-900 to-zinc-950 text-zinc-200 shadow-[0_10px_24px_-14px_rgba(0,0,0,0.95)] transition-all duration-200 hover:-translate-y-0.5 hover:border-cyan-300/35 hover:text-cyan-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/60 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950"
         aria-label="Open notifications"
         aria-expanded={open}
       >
         <span aria-hidden>🔔</span>
       </button>
       {unreadCount > 0 ? (
-        <span className="absolute -right-1 -top-1 inline-flex min-w-[1.1rem] items-center justify-center rounded-full bg-indigo-600 px-1 text-[10px] font-semibold text-white">
+        <span className="absolute -right-1 -top-1 inline-flex min-w-[1.1rem] items-center justify-center rounded-full border border-cyan-200/40 bg-cyan-400 px-1 text-[10px] font-semibold text-zinc-950">
           {unreadCount > 99 ? "99+" : unreadCount}
         </span>
       ) : null}
 
       {open ? (
-        <div className="absolute right-0 mt-2 w-[min(22rem,calc(100vw-2rem))] rounded-xl border border-zinc-200 bg-white p-3 shadow-xl dark:border-zinc-800 dark:bg-zinc-950">
-          <div className="mb-2 flex items-center justify-between gap-2">
+        <div className="absolute right-0 mt-2 w-[min(23rem,calc(100vw-0.75rem))] overflow-hidden rounded-2xl border border-zinc-800/90 bg-gradient-to-b from-zinc-900/95 to-zinc-950/95 p-3 shadow-[0_26px_48px_-24px_rgba(0,0,0,0.95)]">
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-300/45 to-transparent"
+          />
+          <div className="mb-2 flex flex-col gap-2 border-b border-zinc-800/80 pb-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+              <p className="text-sm font-semibold tracking-tight text-zinc-100">
                 Notifications
               </p>
               {unreadCount > 0 ? (
-                <p className="text-[10px] text-zinc-500 dark:text-zinc-400">
+                <p className="text-[10px] text-zinc-400">
                   {unreadCount} unread
                 </p>
               ) : null}
             </div>
-            <Button type="button" size="sm" variant="secondary" onClick={() => void markAllRead()}>
+            <Button type="button" size="sm" variant="secondary" className="w-full sm:w-auto" onClick={() => void markAllRead()}>
               Mark all read
             </Button>
           </div>
 
           {isPending ? (
-            <p className="py-6 text-center text-xs text-zinc-500 dark:text-zinc-400">Loading…</p>
+            <p className="py-7 text-center text-xs text-zinc-400">Loading notifications…</p>
           ) : items.length === 0 ? (
-            <p className="py-6 text-center text-xs text-zinc-500 dark:text-zinc-400">
-              No notifications yet. Project and milestone updates will appear here.
-            </p>
+            <div className="rounded-xl border border-dashed border-zinc-700/80 bg-zinc-950/60 px-3 py-6 text-center">
+              <p className="text-xs font-medium text-zinc-200">No notifications yet</p>
+              <p className="mt-1 text-xs text-zinc-400">
+                Project and milestone updates will appear here.
+              </p>
+            </div>
           ) : (
-            <div className="max-h-80 space-y-2 overflow-y-auto pr-1">
+            <div className="max-h-[22rem] space-y-2 overflow-y-auto pr-1">
               {items.map((item) => (
                 <div
                   key={item.id}
                   className={`rounded-lg border p-2 ${
                     item.readAt
-                      ? "border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900/50"
-                      : "border-indigo-200 bg-indigo-50 dark:border-indigo-900 dark:bg-indigo-950/40"
+                      ? "border-zinc-800/90 bg-zinc-950/70 hover:border-zinc-700/90"
+                      : "border-cyan-300/30 bg-cyan-300/10 hover:border-cyan-300/45"
                   }`}
                 >
                   <div className="flex items-start justify-between gap-2">
-                    <p className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">{item.title}</p>
+                    <p className="text-xs font-semibold text-zinc-100">{item.title}</p>
                     {!item.readAt ? (
                       <button
                         type="button"
                         onClick={() => void markRead(item.id)}
-                        className="text-[10px] font-medium text-indigo-600 hover:underline dark:text-indigo-400"
+                        className="text-[10px] font-medium text-cyan-300 hover:text-cyan-200 hover:underline"
                       >
                         Mark read
                       </button>
                     ) : null}
                   </div>
-                  <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">{item.body}</p>
-                  <div className="mt-2 flex items-center justify-between gap-2 text-[10px] text-zinc-500 dark:text-zinc-400">
+                  <p className="mt-1 break-words text-xs text-zinc-300">{item.body}</p>
+                  <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[10px] text-zinc-400">
                     <span>{formatTimeAgo(item.createdAt)}</span>
                     {item.projectId ? (
                       <Link
                         href={`/projects/${item.projectId}`}
                         onClick={() => setOpen(false)}
-                        className="font-medium text-indigo-600 hover:underline dark:text-indigo-400"
+                        className="font-medium text-cyan-300 hover:text-cyan-200 hover:underline"
                       >
                         Open
                       </Link>

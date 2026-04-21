@@ -476,7 +476,10 @@ async function mapAdminDisputeDetail(dispute: {
         MAX(
           CASE
             WHEN tl."eventName" = 'ProjectFunded'
-              THEN NULLIF(tl."payload"->>'fundedAmountAfter', '')::numeric
+              THEN COALESCE(
+                NULLIF(tl."payload"->>'fundedAmountAfter', '')::numeric,
+                NULLIF(tl."payload"->>'fundedAmountWei', '')::numeric
+              )
             ELSE NULL
           END
         ),

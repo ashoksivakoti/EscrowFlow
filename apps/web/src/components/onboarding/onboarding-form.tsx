@@ -120,17 +120,17 @@ export function OnboardingForm() {
 
       {done ? (
         <div
-          className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-6 text-center dark:border-emerald-900 dark:bg-emerald-950/40"
+          className="mx-4 mb-4 rounded-xl border border-emerald-300/30 bg-emerald-500/10 px-4 py-6 text-center sm:mx-6 sm:mb-6"
           role="status"
         >
-          <p className="text-sm font-medium text-emerald-800 dark:text-emerald-200">
+          <p className="text-sm font-medium text-emerald-200">
             You are all set. Redirecting to your dashboard...
           </p>
         </div>
       ) : (
         <form
           onSubmit={(e) => void onSubmit(e)}
-          className="flex flex-col gap-6"
+          className="flex flex-col gap-5 px-4 pb-5 sm:gap-6 sm:px-6 sm:pb-6"
         >
           <div className="space-y-2">
             <Label htmlFor="displayName">Username</Label>
@@ -169,14 +169,14 @@ export function OnboardingForm() {
           </div>
 
           <fieldset className="space-y-3">
-            <legend className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+            <legend className="text-sm font-medium text-zinc-300">
               Avatar placeholder
             </legend>
             <Controller
               control={form.control}
               name="avatarPreset"
               render={({ field }) => (
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3 sm:gap-3">
                   {(
                     [
                       ["none", "No image"],
@@ -186,10 +186,10 @@ export function OnboardingForm() {
                   ).map(([value, label]) => (
                     <label
                       key={value}
-                      className={`flex min-h-14 cursor-pointer items-center justify-center rounded-xl border px-3 py-3 text-center text-sm font-medium transition ${
+                      className={`flex min-h-12 cursor-pointer items-center justify-center rounded-xl border px-3 py-3 text-center text-sm font-medium transition-all duration-200 sm:min-h-14 ${
                         field.value === value
-                          ? "border-indigo-500 bg-indigo-50 text-indigo-900 dark:border-indigo-400 dark:bg-indigo-950/50 dark:text-indigo-100"
-                          : "border-zinc-200 bg-white hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:border-zinc-600"
+                          ? "border-cyan-300/40 bg-cyan-300/10 text-cyan-100 shadow-[0_0_0_1px_rgba(34,211,238,0.2)]"
+                          : "border-zinc-800/90 bg-zinc-950/70 text-zinc-300 hover:border-zinc-700 hover:bg-zinc-900/80"
                       }`}
                     >
                       <input
@@ -208,19 +208,19 @@ export function OnboardingForm() {
           </fieldset>
 
           <fieldset className="space-y-3">
-            <legend className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+            <legend className="text-sm font-medium text-zinc-300">
               I am joining as
             </legend>
             <Controller
               control={form.control}
               name="role"
               render={({ field }) => (
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 sm:gap-3">
                   <label
-                    className={`flex min-h-14 cursor-pointer flex-col gap-1 rounded-xl border px-4 py-4 transition ${
+                    className={`flex min-h-16 cursor-pointer flex-col gap-1.5 rounded-xl border px-4 py-4 transition-all duration-200 ${
                       field.value === "CLIENT"
-                        ? "border-indigo-500 bg-indigo-50 dark:border-indigo-400 dark:bg-indigo-950/40"
-                        : "border-zinc-200 bg-white hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-950"
+                        ? "border-cyan-300/40 bg-cyan-300/10 shadow-[0_0_0_1px_rgba(34,211,238,0.2)]"
+                        : "border-zinc-800/90 bg-zinc-950/70 hover:border-zinc-700 hover:bg-zinc-900/80"
                     }`}
                   >
                     <input
@@ -229,18 +229,18 @@ export function OnboardingForm() {
                       checked={field.value === "CLIENT"}
                       onChange={() => field.onChange("CLIENT")}
                     />
-                    <span className="font-semibold text-zinc-900 dark:text-white">
+                    <span className="font-semibold text-zinc-100">
                       Client
                     </span>
-                    <span className="text-xs text-zinc-600 dark:text-zinc-400">
+                    <span className="text-xs text-zinc-400">
                       I hire freelancers and fund milestone escrow.
                     </span>
                   </label>
                   <label
-                    className={`flex min-h-14 cursor-pointer flex-col gap-1 rounded-xl border px-4 py-4 transition ${
+                    className={`flex min-h-16 cursor-pointer flex-col gap-1.5 rounded-xl border px-4 py-4 transition-all duration-200 ${
                       field.value === "FREELANCER"
-                        ? "border-indigo-500 bg-indigo-50 dark:border-indigo-400 dark:bg-indigo-950/40"
-                        : "border-zinc-200 bg-white hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-950"
+                        ? "border-cyan-300/40 bg-cyan-300/10 shadow-[0_0_0_1px_rgba(34,211,238,0.2)]"
+                        : "border-zinc-800/90 bg-zinc-950/70 hover:border-zinc-700 hover:bg-zinc-900/80"
                     }`}
                   >
                     <input
@@ -249,10 +249,10 @@ export function OnboardingForm() {
                       checked={field.value === "FREELANCER"}
                       onChange={() => field.onChange("FREELANCER")}
                     />
-                    <span className="font-semibold text-zinc-900 dark:text-white">
+                    <span className="font-semibold text-zinc-100">
                       Freelancer
                     </span>
-                    <span className="text-xs text-zinc-600 dark:text-zinc-400">
+                    <span className="text-xs text-zinc-400">
                       I deliver milestones and receive milestone payouts.
                     </span>
                   </label>

@@ -159,11 +159,14 @@ export async function acceptProjectApplication(
   applicationId: string,
   clientUserId: string,
 ): Promise<void> {
-  let acceptanceNotice: { projectTitle: string; freelancerUserId: string } | null = null;
-  let declinedOtherApplicants: { projectTitle: string; freelancerUserIds: string[] } | null = null;
+  type AcceptanceNotice = { projectTitle: string; freelancerUserId: string };
+  type DeclinedNotice = { projectTitle: string; freelancerUserIds: string[] };
 
-  await prisma.$transaction(
-    async (tx) => {
+  const { acceptanceNotice, declinedOtherApplicants } = await prisma.$transaction(
+    async (tx): Promise<{
+      acceptanceNotice: AcceptanceNotice;
+      declinedOtherApplicants: DeclinedNotice | null;
+    }> => {
       const projectRow = await tx.project.findUnique({
         where: { id: projectId },
         select: {
@@ -228,27 +231,27 @@ export async function acceptProjectApplication(
         },
       });
 
-      acceptanceNotice = {
+      const acceptanceNotice: AcceptanceNotice = {
         projectTitle: project.title,
         freelancerUserId: pending.freelancerUserId,
       };
 
       const otherFreelancerIds = otherPendingRows.map((row) => row.freelancerUserId);
-      declinedOtherApplicants =
+      const declinedOtherApplicants: DeclinedNotice | null =
         otherFreelancerIds.length > 0
           ? { projectTitle: project.title, freelancerUserIds: otherFreelancerIds }
           : null;
+
+      return { acceptanceNotice, declinedOtherApplicants };
     },
     prismaInteractiveTransactionOptions,
   );
 
-  if (acceptanceNotice) {
-    await notifyProjectApplicationAccepted({
-      projectId,
-      projectTitle: acceptanceNotice.projectTitle,
-      freelancerUserId: acceptanceNotice.freelancerUserId,
-    });
-  }
+  await notifyProjectApplicationAccepted({
+    projectId,
+    projectTitle: acceptanceNotice.projectTitle,
+    freelancerUserId: acceptanceNotice.freelancerUserId,
+  });
   if (declinedOtherApplicants?.freelancerUserIds.length) {
     await notifyProjectApplicationsDeclined({
       projectId,
@@ -264,11 +267,15 @@ export async function declineProjectApplication(
   applicationId: string,
   clientUserId: string,
 ): Promise<void> {
-  const project = await prisma.project.findUnique({
+  const projectRow = await prisma.project.findUnique({
     where: { id: projectId },
     select: { clientUserId: true, title: true },
   });
-  assertProjectClient(project, clientUserId, "Only the project client can decline applications");
+  const project = assertProjectClient(
+    projectRow,
+    clientUserId,
+    "Only the project client can decline applications",
+  );
 
   const applicationRow = await prisma.projectApplication.findFirst({
     where: { id: applicationId, projectId },

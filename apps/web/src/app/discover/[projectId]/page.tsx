@@ -148,7 +148,7 @@ export default function DiscoverProjectDetailPage() {
             </CardDescription>
           </CardHeader>
           <div className="px-4 pb-4 sm:px-6">
-            <Link href="/discover" className={buttonClassName({ variant: "secondary" })}>
+            <Link href="/discover" className={buttonClassName({ variant: "secondary", className: "w-full sm:w-auto" })}>
               Back to discover
             </Link>
           </div>
@@ -157,36 +157,36 @@ export default function DiscoverProjectDetailPage() {
         <div className="flex w-full max-w-full flex-col gap-5">
           <Card className="w-full max-w-full overflow-hidden">
             <CardHeader>
-              <CardTitle className="text-balance">{data.project.title}</CardTitle>
+              <CardTitle className="text-balance text-2xl tracking-tight sm:text-3xl">{data.project.title}</CardTitle>
               <CardDescription className="text-pretty">
                 {data.project.description?.trim() || "No description provided."}
               </CardDescription>
             </CardHeader>
-            <div className="space-y-2 border-t border-zinc-100 px-4 py-4 text-sm dark:border-zinc-800 sm:px-6">
+            <div className="space-y-2 border-t border-zinc-800/90 px-4 py-4 text-sm sm:px-6">
               <p>
-                <span className="font-medium text-zinc-700 dark:text-zinc-300">Client: </span>
+                <span className="font-medium text-zinc-200">Client: </span>
                 {data.project.client.displayName ?? "—"}
               </p>
-              <p className="break-all text-xs text-zinc-500 dark:text-zinc-400">
+              <p className="break-all text-xs text-zinc-400">
                 {data.project.client.walletAddress}
               </p>
               <p>
-                <span className="font-medium text-zinc-700 dark:text-zinc-300">Milestones: </span>
+                <span className="font-medium text-zinc-200">Milestones: </span>
                 {data.project.milestones.length}
               </p>
             </div>
-            <div className="flex flex-col gap-2 border-t border-zinc-100 px-4 py-4 dark:border-zinc-800 sm:flex-row sm:flex-wrap sm:px-6">
-              <Link href="/discover" className={buttonClassName({ variant: "secondary" })}>
+            <div className="flex flex-col gap-2 border-t border-zinc-800/90 px-4 py-4 sm:flex-row sm:flex-wrap sm:items-center sm:px-6">
+              <Link href="/discover" className={buttonClassName({ variant: "secondary", className: "w-full sm:w-auto" })}>
                 Back
               </Link>
               {me?.id === data.project.client.id ? (
-                <p className="text-sm text-zinc-600 dark:text-zinc-400">You posted this project.</p>
+                <p className="break-words text-sm text-zinc-400">You posted this project.</p>
               ) : myStatus ? (
-                <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                <p className="break-words text-sm text-zinc-400">
                   Your application status: <span className="font-medium">{myStatus}</span>
                 </p>
               ) : canApply ? (
-                <Button type="button" onClick={() => setApplyOpen((v) => !v)}>
+                <Button type="button" className="w-full sm:w-auto" onClick={() => setApplyOpen((v) => !v)}>
                   {applyOpen ? "Close form" : "Apply to project"}
                 </Button>
               ) : null}
@@ -202,7 +202,7 @@ export default function DiscoverProjectDetailPage() {
                 </CardDescription>
               </CardHeader>
               <form
-                className="flex flex-col gap-4 px-4 pb-6 sm:px-6"
+                className="flex flex-col gap-4 px-4 pb-6 sm:gap-5 sm:px-6"
                 onSubmit={(e) => {
                   e.preventDefault();
                   setApplyError(null);
@@ -225,7 +225,7 @@ export default function DiscoverProjectDetailPage() {
                   <FieldError message={form.formState.errors.proposedTimeline?.message} />
                 </div>
                 <FieldError message={applyError ?? undefined} />
-                <Button type="submit" disabled={applyMutation.isPending}>
+                <Button type="submit" className="w-full sm:w-auto" disabled={applyMutation.isPending}>
                   {applyMutation.isPending ? "Submitting…" : "Submit application"}
                 </Button>
               </form>

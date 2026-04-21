@@ -190,6 +190,13 @@ export function CreateMarketplaceProjectForm() {
         onSubmit={(e) => void onSubmit(e)}
         className="flex flex-col gap-5 px-4 pb-6 sm:px-6"
       >
+        <section className="rounded-xl border border-zinc-800/80 bg-zinc-950/50 p-3 sm:p-4">
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-cyan-200">Marketplace listing</p>
+          <p className="mt-1 text-xs text-zinc-400">
+            Publish a clear scope so qualified freelancers can apply quickly.
+          </p>
+        </section>
+
         <div className="space-y-2">
           <Label htmlFor="title">Title</Label>
           <Input id="title" {...form.register("title")} aria-invalid={Boolean(form.formState.errors.title)} />
@@ -201,23 +208,26 @@ export function CreateMarketplaceProjectForm() {
           <FieldError message={form.formState.errors.description?.message} />
         </div>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div className="space-y-2">
-            <Label htmlFor="chainId">Chain id (optional)</Label>
-            <Input id="chainId" inputMode="numeric" {...form.register("chainId")} />
-            <FieldError message={form.formState.errors.chainId?.message} />
+        <section className="space-y-4 rounded-xl border border-zinc-800/80 bg-zinc-950/45 p-3 sm:p-4">
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-cyan-200">On-chain defaults</p>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="chainId">Chain id (optional)</Label>
+              <Input id="chainId" inputMode="numeric" {...form.register("chainId")} />
+              <FieldError message={form.formState.errors.chainId?.message} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="paymentTokenAddress">Payment token (optional)</Label>
+              <Input id="paymentTokenAddress" placeholder="0x..." {...form.register("paymentTokenAddress")} />
+              <FieldError message={form.formState.errors.paymentTokenAddress?.message} />
+            </div>
+            <div className="space-y-2 sm:col-span-2">
+              <Label htmlFor="escrowContractAddress">Escrow registry (optional)</Label>
+              <Input id="escrowContractAddress" placeholder="0x..." {...form.register("escrowContractAddress")} />
+              <FieldError message={form.formState.errors.escrowContractAddress?.message} />
+            </div>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="paymentTokenAddress">Payment token (optional)</Label>
-            <Input id="paymentTokenAddress" placeholder="0x..." {...form.register("paymentTokenAddress")} />
-            <FieldError message={form.formState.errors.paymentTokenAddress?.message} />
-          </div>
-          <div className="space-y-2 sm:col-span-2">
-            <Label htmlFor="escrowContractAddress">Escrow registry (optional)</Label>
-            <Input id="escrowContractAddress" placeholder="0x..." {...form.register("escrowContractAddress")} />
-            <FieldError message={form.formState.errors.escrowContractAddress?.message} />
-          </div>
-        </div>
+        </section>
 
         <div className="space-y-2">
           <Label>Agreement file (optional)</Label>
@@ -231,8 +241,8 @@ export function CreateMarketplaceProjectForm() {
         <div className="space-y-3">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">Milestones</p>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400">
+              <p className="text-sm font-medium text-zinc-100">Milestones</p>
+              <p className="text-xs text-zinc-400">
                 Total: {totalMilestoneAmount.toLocaleString("en-US")} wei (smallest units)
               </p>
             </div>
@@ -240,6 +250,7 @@ export function CreateMarketplaceProjectForm() {
               type="button"
               variant="secondary"
               size="sm"
+              className="w-full sm:w-auto"
               onClick={() => milestoneArray.append({ ...emptyMilestone })}
             >
               Add milestone
@@ -248,14 +259,14 @@ export function CreateMarketplaceProjectForm() {
           {milestoneArray.fields.map((field, index) => (
             <div
               key={field.id}
-              className="space-y-3 rounded-xl border border-zinc-200 p-3 dark:border-zinc-800"
+              className="space-y-3 rounded-xl border border-zinc-800/90 bg-zinc-950/60 p-3 transition-all duration-200 hover:-translate-y-0.5 hover:border-zinc-700/90"
             >
               <div className="flex items-center justify-between gap-2">
-                <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">
+                <p className="text-sm font-medium text-zinc-100">
                   Milestone {index + 1}
                 </p>
                 {milestoneArray.fields.length > 1 ? (
-                  <Button type="button" variant="ghost" size="sm" onClick={() => milestoneArray.remove(index)}>
+                  <Button type="button" variant="ghost" size="sm" className="w-full sm:w-auto" onClick={() => milestoneArray.remove(index)}>
                     Remove
                   </Button>
                 ) : null}

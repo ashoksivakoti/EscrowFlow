@@ -127,7 +127,7 @@ export default function ProjectApplicationsPage() {
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <Link
               href={`/projects/${projectId}`}
-              className={buttonClassName({ variant: "secondary" })}
+              className={buttonClassName({ variant: "secondary", className: "w-full sm:w-auto" })}
             >
               Back to project
             </Link>
@@ -156,28 +156,33 @@ export default function ProjectApplicationsPage() {
                       {app.freelancer.walletAddress}
                     </CardDescription>
                   </CardHeader>
-                  <div className="space-y-2 border-t border-zinc-100 px-4 py-3 text-sm dark:border-zinc-800 sm:px-6">
-                    <p className="font-medium text-zinc-700 dark:text-zinc-300">Status: {app.status}</p>
-                    <p className="whitespace-pre-wrap text-zinc-800 dark:text-zinc-100">{app.coverLetter}</p>
+                  <div className="space-y-2 border-t border-zinc-800/90 px-4 py-3 text-sm sm:px-6">
+                    <p className="inline-flex w-fit rounded-full border border-cyan-300/30 bg-cyan-300/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-cyan-200">
+                      {app.status}
+                    </p>
+                    <p className="whitespace-pre-wrap text-zinc-100">{app.coverLetter}</p>
                     {app.portfolioLink ? (
                       <a
                         href={app.portfolioLink}
                         target="_blank"
                         rel="noreferrer"
-                        className="text-indigo-600 hover:underline dark:text-indigo-400"
+                        className="break-all text-cyan-300 hover:text-cyan-200 hover:underline"
                       >
                         Portfolio
                       </a>
                     ) : null}
                     {app.proposedTimeline ? (
-                      <p className="text-xs text-zinc-600 dark:text-zinc-400">{app.proposedTimeline}</p>
+                      <p className="break-words text-xs text-zinc-600 dark:text-zinc-400">
+                        {app.proposedTimeline}
+                      </p>
                     ) : null}
                   </div>
                   {app.status === "PENDING" ? (
-                    <div className="flex flex-col gap-2 border-t border-zinc-100 px-4 py-3 dark:border-zinc-800 sm:flex-row sm:justify-end sm:px-6">
+                    <div className="flex flex-col gap-2 border-t border-zinc-800/90 px-4 py-3 sm:flex-row sm:justify-end sm:px-6">
                       <Button
                         type="button"
                         variant="secondary"
+                        className="w-full sm:w-auto"
                         disabled={declineMutation.isPending || acceptMutation.isPending}
                         onClick={() => declineMutation.mutate(app.id)}
                       >
@@ -185,6 +190,7 @@ export default function ProjectApplicationsPage() {
                       </Button>
                       <Button
                         type="button"
+                        className="w-full sm:w-auto"
                         disabled={acceptMutation.isPending || declineMutation.isPending}
                         onClick={() => acceptMutation.mutate(app.id)}
                       >

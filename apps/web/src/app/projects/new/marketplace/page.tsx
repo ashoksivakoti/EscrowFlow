@@ -58,7 +58,7 @@ export default function NewMarketplaceProjectPage() {
             <CardDescription>Complete onboarding as a client to post marketplace projects.</CardDescription>
           </CardHeader>
           <div className="px-4 pb-4 sm:px-6">
-            <Button type="button" variant="secondary" onClick={() => router.push("/projects/new")}>
+            <Button type="button" variant="secondary" className="w-full sm:w-auto" onClick={() => router.push("/projects/new")}>
               Direct invite flow
             </Button>
           </div>

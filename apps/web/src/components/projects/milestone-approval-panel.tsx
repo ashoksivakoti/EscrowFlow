@@ -5,6 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useChainId, usePublicClient, useSwitchChain, useWalletClient } from "wagmi";
 
 import { escrowRegistryAbi } from "@/lib/contracts/escrow-registry-abi";
+import { estimateCappedWriteGas } from "@/lib/contracts/safe-write-gas";
 import { Button } from "@/components/ui/button";
 import { FieldError } from "@/components/ui/field-error";
 import { Textarea } from "@/components/ui/textarea";
@@ -60,12 +61,25 @@ export function MilestoneApprovalPanel(props: {
     }
 
     try {
+      const account = walletClient.account.address;
+      const approveArgs = [BigInt(props.onChainProjectId), BigInt(props.milestoneIndex)] as const;
+      const releaseArgs = [BigInt(props.onChainProjectId), BigInt(props.milestoneIndex)] as const;
+
       setPhase("approve_signing");
+      const approveGas = await estimateCappedWriteGas({
+        publicClient,
+        account,
+        address: props.escrowContractAddress,
+        abi: escrowRegistryAbi,
+        functionName: "approveMilestone",
+        args: approveArgs,
+      });
       const approveTxHash = await walletClient.writeContract({
         address: props.escrowContractAddress,
         abi: escrowRegistryAbi,
         functionName: "approveMilestone",
-        args: [BigInt(props.onChainProjectId), BigInt(props.milestoneIndex)],
+        args: approveArgs,
+        gas: approveGas,
         chain: walletClient.chain,
         account: walletClient.account,
       });
@@ -75,11 +89,20 @@ export function MilestoneApprovalPanel(props: {
       setPhase("approve_success");
 
       setPhase("release_signing");
+      const releaseGas = await estimateCappedWriteGas({
+        publicClient,
+        account,
+        address: props.escrowContractAddress,
+        abi: escrowRegistryAbi,
+        functionName: "releaseMilestone",
+        args: releaseArgs,
+      });
       const releaseTxHash = await walletClient.writeContract({
         address: props.escrowContractAddress,
         abi: escrowRegistryAbi,
         functionName: "releaseMilestone",
-        args: [BigInt(props.onChainProjectId), BigInt(props.milestoneIndex)],
+        args: releaseArgs,
+        gas: releaseGas,
         chain: walletClient.chain,
         account: walletClient.account,
       });
@@ -148,12 +171,12 @@ export function MilestoneApprovalPanel(props: {
   })();
 
   return (
-    <div className="mt-3 rounded-xl border border-zinc-200 bg-zinc-50/70 p-3 dark:border-zinc-800 dark:bg-zinc-900/60">
-      <p className="text-xs font-semibold uppercase tracking-wide text-zinc-600 dark:text-zinc-300">
+    <div className="mt-3 rounded-xl border border-zinc-800/90 bg-zinc-950/60 p-3 sm:p-4">
+      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-cyan-200">
         Review and approve payout
       </p>
       <div className="mt-2 space-y-2">
-        <p className="text-xs text-zinc-600 dark:text-zinc-400">
+        <p className="text-xs leading-relaxed text-zinc-400">
           1) Add optional review note for audit trail. 2) Approve submission and release
           payout on-chain.
         </p>
@@ -168,13 +191,13 @@ export function MilestoneApprovalPanel(props: {
       </div>
 
       {chainMismatch ? (
-        <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300">
+        <div className="mt-3 rounded-xl border border-amber-300/35 bg-amber-300/10 px-3 py-2 text-xs text-amber-100">
           <p>Wallet network mismatch. Switch to chain {props.chainId} first.</p>
           <Button
             type="button"
             size="sm"
             variant="secondary"
-            className="mt-2"
+            className="mt-2 w-full sm:w-auto"
             onClick={() => {
               void switchChainAsync({ chainId: props.chainId });
             }}
@@ -188,8 +211,8 @@ export function MilestoneApprovalPanel(props: {
         <div
           className={`mt-3 rounded-xl border px-3 py-2 text-xs ${
             phase === "failure"
-              ? "border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300"
-              : "border-indigo-200 bg-indigo-50 text-indigo-800 dark:border-indigo-900 dark:bg-indigo-950/40 dark:text-indigo-300"
+              ? "border-red-300/35 bg-red-300/10 text-red-100"
+              : "border-cyan-300/30 bg-cyan-300/10 text-cyan-100"
           }`}
           role="status"
         >
@@ -200,7 +223,13 @@ export function MilestoneApprovalPanel(props: {
       <FieldError message={errorMessage ?? undefined} className="mt-2 text-xs" />
 
       <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:justify-end">
-        <Button type="button" size="sm" disabled={isBusy} onClick={() => void approveAndPayout()}>
+        <Button
+          type="button"
+          size="sm"
+          className="w-full sm:w-auto"
+          disabled={isBusy}
+          onClick={() => void approveAndPayout()}
+        >
           {isBusy ? "Processing…" : "Approve and release payout"}
         </Button>
       </div>

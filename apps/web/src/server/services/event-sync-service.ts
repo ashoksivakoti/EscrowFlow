@@ -6,6 +6,7 @@ import { createPublicClient, http, parseAbiItem } from "viem";
 import { prisma } from "@/lib/prisma";
 import { createLogger } from "@/server/logging/logger";
 import { getEventSyncEnv } from "@/server/event-sync/env";
+import { milestoneFundingSyncUpdates } from "@/server/services/funding-service";
 
 const projectCreatedEvent = parseAbiItem(
   "event ProjectCreated(uint256 indexed projectId,address indexed client,address indexed freelancer,address token,uint256 totalAmount,string metadataURI,uint256 milestoneCount)",
@@ -458,6 +459,19 @@ async function syncProjectFunded(
       status: finalStatus,
     },
   });
+
+  const milestones = await tx.milestone.findMany({
+    where: { projectId: project.id },
+    orderBy: { sortOrder: "asc" },
+    select: { id: true, sortOrder: true, status: true, amountWei: true, fundedAt: true },
+  });
+  const now = new Date();
+  for (const row of milestoneFundingSyncUpdates(milestones, fundedAmount, now)) {
+    await tx.milestone.update({
+      where: { id: row.id },
+      data: { status: row.status, fundedAt: row.fundedAt },
+    });
+  }
 
   return project.id;
 }

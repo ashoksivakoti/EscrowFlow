@@ -65,8 +65,8 @@ export default function CreateProjectPage() {
               in onboarding first.
             </CardDescription>
           </CardHeader>
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <Button onClick={() => router.push("/onboarding")}>
+          <div className="flex flex-col gap-3 px-4 pb-4 sm:flex-row sm:px-6 sm:pb-6">
+            <Button className="w-full sm:w-auto" onClick={() => router.push("/onboarding")}>
               Go to onboarding
             </Button>
             <Button
@@ -80,14 +80,14 @@ export default function CreateProjectPage() {
         </Card>
       ) : (
         <div className="flex w-full max-w-full flex-col gap-5">
-          <Card className="w-full max-w-full border-indigo-200 bg-indigo-50/60 dark:border-indigo-900 dark:bg-indigo-950/30">
+          <Card className="w-full max-w-full border-cyan-300/30 bg-gradient-to-r from-cyan-400/12 via-cyan-300/8 to-transparent">
             <CardHeader>
               <CardTitle className="text-base sm:text-lg">Hiring via marketplace?</CardTitle>
               <CardDescription>
                 Post a public OPEN project so freelancers can apply. You pick one, then fund escrow.
               </CardDescription>
             </CardHeader>
-            <div className="px-4 pb-4 sm:px-6">
+            <div className="border-t border-zinc-800/80 px-4 py-4 sm:px-6 sm:py-5">
               <Link
                 href="/projects/new/marketplace"
                 className={buttonClassName({ variant: "secondary", className: "w-full sm:w-auto" })}

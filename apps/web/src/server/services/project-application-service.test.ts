@@ -96,8 +96,8 @@ function createTransactionMock(tx: {
     updateMany: ReturnType<typeof vi.fn>;
   };
 }) {
-  vi.mocked(prisma.$transaction).mockImplementation(async (fn: (t: typeof tx) => Promise<void>) => {
-    await fn(tx);
+  vi.mocked(prisma.$transaction).mockImplementation(async (fn) => {
+    return (fn as unknown as (t: typeof tx) => Promise<unknown>)(tx);
   });
 }
 
@@ -236,7 +236,7 @@ describe("listProjectApplicationsForClient", () => {
     const result = await listProjectApplicationsForClient(PROJECT_ID, CLIENT_ID);
 
     expect(result.applications).toHaveLength(1);
-    expect(result.applications[0].id).toBe(APP_1);
+    expect(result.applications[0]?.id).toBe(APP_1);
     expect(prisma.projectApplication.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { projectId: PROJECT_ID } }),
     );

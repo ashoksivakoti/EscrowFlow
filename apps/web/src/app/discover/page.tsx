@@ -82,12 +82,12 @@ export default function DiscoverProjectsPage() {
         </div>
       ) : (
         <div className="flex w-full max-w-full flex-col gap-5">
-          <Card className="w-full max-w-full">
+          <Card className="w-full max-w-full overflow-hidden">
             <CardHeader>
               <CardTitle className="text-lg sm:text-xl">Search</CardTitle>
               <CardDescription>Filter by title or description keywords.</CardDescription>
             </CardHeader>
-            <div className="px-4 pb-4 sm:px-6">
+            <div className="border-t border-zinc-800/90 bg-gradient-to-r from-zinc-950/35 via-zinc-900/25 to-zinc-950/35 px-4 py-4 sm:px-6 sm:py-5">
               <Label htmlFor="discover-search" className="sr-only">
                 Search
               </Label>
@@ -114,22 +114,25 @@ export default function DiscoverProjectsPage() {
               </CardHeader>
             </Card>
           ) : (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {items.map((p) => (
-                <Card key={p.id} className="flex w-full max-w-full flex-col overflow-hidden">
+                <Card
+                  key={p.id}
+                  className="group flex w-full max-w-full flex-col overflow-hidden transition-all duration-200 hover:-translate-y-0.5 hover:border-cyan-300/30"
+                >
                   <CardHeader className="min-w-0">
                     <CardTitle className="line-clamp-2 text-base sm:text-lg">{p.title}</CardTitle>
-                    <CardDescription className="line-clamp-3">
+                    <CardDescription className="line-clamp-3 min-h-[4.25rem]">
                       {p.description?.trim() ? p.description : "No description."}
                     </CardDescription>
                   </CardHeader>
-                  <div className="mt-auto flex flex-col gap-2 border-t border-zinc-100 px-4 py-3 dark:border-zinc-800 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-                    <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                  <div className="mt-auto flex flex-col gap-2 border-t border-zinc-800/90 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+                    <p className="text-xs text-zinc-400">
                       {p.milestoneCount} milestone{p.milestoneCount === 1 ? "" : "s"}
                     </p>
                     <Link
                       href={`/discover/${p.id}`}
-                      className={buttonClassName({ variant: "primary", size: "sm" })}
+                      className={buttonClassName({ variant: "primary", size: "sm", className: "w-full sm:w-auto" })}
                     >
                       View and apply
                     </Link>

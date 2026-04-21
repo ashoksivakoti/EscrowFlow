@@ -30,11 +30,12 @@ export default function OnboardingPage() {
     <AuthShell
       title="Welcome aboard"
       subtitle="Finish your profile to unlock project creation, milestone workflows, and payouts."
+      containerClassName="max-w-2xl sm:max-w-2xl"
     >
       {isPending || !isFetched ? (
         <div className="flex flex-col items-center justify-center gap-4 py-20">
           <Spinner />
-          <p className="text-sm text-zinc-600 dark:text-zinc-400">
+          <p className="text-sm text-zinc-400">
             Loading your account settings...
           </p>
         </div>

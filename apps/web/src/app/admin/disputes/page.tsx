@@ -70,8 +70,8 @@ export default function AdminDisputesPage() {
               You need ADMIN role to access dispute resolution workflows.
             </CardDescription>
           </CardHeader>
-          <div className="flex justify-end">
-            <Button type="button" variant="secondary" onClick={() => router.push("/dashboard")}>
+          <div className="flex justify-end px-4 pb-4 sm:px-6">
+            <Button type="button" variant="secondary" className="w-full sm:w-auto" onClick={() => router.push("/dashboard")}>
               Back to dashboard
             </Button>
           </div>
@@ -87,14 +87,14 @@ export default function AdminDisputesPage() {
       className="overflow-x-hidden"
       containerClassName="max-w-6xl sm:max-w-6xl"
     >
-      <Card>
+      <Card className="overflow-hidden">
         <CardHeader>
           <CardTitle>Admin dispute queue</CardTitle>
           <CardDescription>
             Choose a filter and resolve each dispute with a clear audit trail.
           </CardDescription>
         </CardHeader>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-3 border-t border-zinc-800/90 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-5">
           <div className="flex flex-wrap gap-2">
             {(["open", "resolved", "all"] as const).map((value) => (
               <Button
@@ -108,11 +108,21 @@ export default function AdminDisputesPage() {
               </Button>
             ))}
           </div>
-          <Button type="button" variant="secondary" size="sm" onClick={() => router.push("/dashboard")}>
+          <Button type="button" variant="secondary" size="sm" className="w-full sm:w-auto" onClick={() => router.push("/dashboard")}>
             Back to dashboard
           </Button>
         </div>
       </Card>
+
+      <section className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <AdminMetric label="Queue scope" value={capitalize(statusFilter)} hint="Active filter" />
+        <AdminMetric
+          label="Visible disputes"
+          value={String(disputes?.length ?? 0)}
+          hint="Current result set"
+        />
+        <AdminMetric label="Resolution mode" value="On-chain + sync" hint="Contract + API reconciliation" />
+      </section>
 
       <div className="mt-5 space-y-4">
         {disputesLoading ? (
@@ -254,9 +264,9 @@ function DisputeCard({ dispute }: { dispute: AdminDisputeDetail }) {
   }
 
   return (
-    <Card>
+    <Card className="overflow-hidden transition-all duration-200 hover:-translate-y-0.5">
       <CardHeader>
-        <CardTitle className="text-base sm:text-lg">
+          <CardTitle className="break-words text-base sm:text-lg">
           {dispute.project.title} · M{dispute.milestone.sortOrder + 1} {dispute.milestone.title}
         </CardTitle>
         <CardDescription>
@@ -266,33 +276,33 @@ function DisputeCard({ dispute }: { dispute: AdminDisputeDetail }) {
       </CardHeader>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <div className="space-y-3 rounded-xl border border-zinc-200 p-3 dark:border-zinc-800">
+        <div className="space-y-3 rounded-xl border border-zinc-800/90 bg-zinc-950/55 p-3">
           <p className="text-xs font-semibold uppercase tracking-wide text-zinc-600 dark:text-zinc-300">
             Context
           </p>
-          <p className="text-sm text-zinc-700 dark:text-zinc-300">{dispute.description}</p>
-          <p className="text-xs text-zinc-600 dark:text-zinc-400">
+          <p className="text-sm text-zinc-200">{dispute.description}</p>
+          <p className="text-xs text-zinc-400">
             Project status: {prettyStatus(dispute.project.status)} · Milestone status:{" "}
             {prettyStatus(dispute.milestone.status)}
           </p>
-          <p className="text-xs text-zinc-600 dark:text-zinc-400">
+          <p className="text-xs text-zinc-400">
             Client: {truncateWallet(dispute.participants.client.walletAddress)}
           </p>
-          <p className="text-xs text-zinc-600 dark:text-zinc-400">
+          <p className="text-xs text-zinc-400">
             Freelancer:{" "}
             {dispute.participants.freelancer
               ? truncateWallet(dispute.participants.freelancer.walletAddress)
               : "Unassigned"}
           </p>
           {dispute.relatedSubmission ? (
-            <p className="text-xs text-zinc-600 dark:text-zinc-400">
+            <p className="text-xs text-zinc-400">
               Related submission: {dispute.relatedSubmission.id.slice(0, 10)}... (
               {prettyStatus(dispute.relatedSubmission.status)})
             </p>
           ) : null}
         </div>
 
-        <div className="space-y-3 rounded-xl border border-zinc-200 p-3 dark:border-zinc-800">
+        <div className="space-y-3 rounded-xl border border-zinc-800/90 bg-zinc-950/55 p-3">
           <p className="text-xs font-semibold uppercase tracking-wide text-zinc-600 dark:text-zinc-300">
             Evidence links
           </p>
@@ -303,19 +313,19 @@ function DisputeCard({ dispute }: { dispute: AdminDisputeDetail }) {
                 href={toGatewayUrl(link)}
                 target="_blank"
                 rel="noreferrer"
-                className="block break-all text-xs text-indigo-600 hover:underline dark:text-indigo-400"
+                className="block break-all text-xs text-cyan-300 hover:text-cyan-200 hover:underline"
               >
                 {link}
               </a>
             ))}
           </div>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+          <p className="text-xs text-zinc-500">
             Ensure evidence consistency before final resolution.
           </p>
         </div>
       </div>
 
-      <div className="mt-4 rounded-xl border border-zinc-200 p-3 dark:border-zinc-800">
+      <div className="mt-4 rounded-xl border border-zinc-800/90 bg-zinc-950/55 p-3">
         <p className="text-xs font-semibold uppercase tracking-wide text-zinc-600 dark:text-zinc-300">
           Recent transactions
         </p>
@@ -326,16 +336,16 @@ function DisputeCard({ dispute }: { dispute: AdminDisputeDetail }) {
             dispute.recentTransactions.slice(0, 5).map((tx) => (
               <div
                 key={`${tx.txHash}-${tx.logIndex}`}
-                className="rounded-lg border border-zinc-200 p-2 text-xs dark:border-zinc-700"
+                className="rounded-lg border border-zinc-800/90 bg-zinc-950/70 p-2 text-xs"
               >
-                <p className="font-medium text-zinc-800 dark:text-zinc-200">{tx.eventName}</p>
-                <p className="break-all text-zinc-600 dark:text-zinc-400">{tx.txHash}</p>
+                <p className="font-medium text-zinc-100">{tx.eventName}</p>
+                <p className="break-all text-zinc-400">{tx.txHash}</p>
                 {getExplorerTxUrl(tx.chainId ?? dispute.project.chainId, tx.txHash) ? (
                   <a
                     href={getExplorerTxUrl(tx.chainId ?? dispute.project.chainId, tx.txHash)!}
                     target="_blank"
                     rel="noreferrer"
-                    className="mt-1 inline-block font-medium text-indigo-600 hover:underline dark:text-indigo-400"
+                    className="mt-1 inline-block font-medium text-cyan-300 hover:text-cyan-200 hover:underline"
                   >
                     View on explorer
                   </a>
@@ -347,11 +357,11 @@ function DisputeCard({ dispute }: { dispute: AdminDisputeDetail }) {
       </div>
 
       {canResolve ? (
-        <div className="mt-4 rounded-xl border border-indigo-200 bg-indigo-50/50 p-3 dark:border-indigo-900 dark:bg-indigo-950/30">
-          <p className="text-xs font-semibold uppercase tracking-wide text-indigo-800 dark:text-indigo-300">
+        <div className="mt-4 rounded-xl border border-cyan-300/30 bg-cyan-300/10 p-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-cyan-200">
             Resolve dispute
           </p>
-          <div className="mt-2 flex flex-wrap gap-2">
+          <div className="mt-2 grid grid-cols-1 gap-2 sm:flex sm:flex-wrap">
             {(
               [
                 ["PAYOUT_TO_FREELANCER", "Payout to freelancer"],
@@ -364,6 +374,7 @@ function DisputeCard({ dispute }: { dispute: AdminDisputeDetail }) {
                 type="button"
                 size="sm"
                 variant={kind === value ? "primary" : "secondary"}
+                className="w-full sm:w-auto"
                 onClick={() => {
                   setKind(value);
                   if (value === "PAYOUT_TO_FREELANCER") {
@@ -397,7 +408,7 @@ function DisputeCard({ dispute }: { dispute: AdminDisputeDetail }) {
               <Input value={clientAmountWei} onChange={(e) => setClientAmountWei(e.target.value.trim())} />
             </div>
           </div>
-          <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
+          <p className="mt-1 text-xs text-zinc-400">
             Milestone amount: {dispute.milestone.amountWei} wei
           </p>
 
@@ -415,7 +426,7 @@ function DisputeCard({ dispute }: { dispute: AdminDisputeDetail }) {
           </div>
 
           {hasOnchainContext ? (
-            <div className="mt-3 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
+            <div className="mt-3 rounded-lg border border-zinc-800/90 bg-zinc-950/80 px-3 py-2 text-xs text-zinc-300">
               <p>On-chain resolution enabled.</p>
               <p>Chain: {dispute.project.chainId}</p>
               {chainMismatch ? (
@@ -423,7 +434,7 @@ function DisputeCard({ dispute }: { dispute: AdminDisputeDetail }) {
                   type="button"
                   size="sm"
                   variant="secondary"
-                  className="mt-2"
+                  className="mt-2 w-full sm:w-auto"
                   onClick={() => {
                     if (dispute.project.chainId) {
                       void switchChainAsync({ chainId: dispute.project.chainId });
@@ -451,6 +462,7 @@ function DisputeCard({ dispute }: { dispute: AdminDisputeDetail }) {
             <Button
               type="button"
               size="sm"
+              className="w-full sm:w-auto"
               disabled={Boolean(validationError) || phase === "signing" || phase === "pending" || phase === "syncing"}
               onClick={() => void submitResolution()}
             >
@@ -555,4 +567,22 @@ function toGatewayUrl(uri: string): string {
 
 function capitalize(value: string): string {
   return value.length ? value[0]!.toUpperCase() + value.slice(1) : value;
+}
+
+function AdminMetric({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: string;
+  hint: string;
+}) {
+  return (
+    <Card className="p-4 transition-all duration-200 hover:-translate-y-0.5 sm:p-5">
+      <p className="text-xs font-medium uppercase tracking-[0.12em] text-zinc-500">{label}</p>
+      <p className="mt-2 break-words text-lg font-semibold text-zinc-100">{value}</p>
+      <p className="mt-1 text-xs text-zinc-400">{hint}</p>
+    </Card>
+  );
 }

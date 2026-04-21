@@ -78,11 +78,11 @@ export function DisputeCreatePanel(props: {
   }
 
   return (
-    <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50/60 p-3 dark:border-amber-900 dark:bg-amber-950/30">
-      <p className="text-xs font-semibold uppercase tracking-wide text-amber-800 dark:text-amber-300">
+    <div className="mt-3 rounded-xl border border-amber-300/35 bg-amber-300/10 p-3 sm:p-4">
+      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-amber-200">
         Raise dispute
       </p>
-      <p className="mt-2 text-xs text-amber-900/90 dark:text-amber-200">
+      <p className="mt-2 text-xs leading-relaxed text-amber-100/85">
         Raising a dispute freezes approval/release actions for this milestone until review is
         resolved. Attach evidence files to support your claim (up to 5 files).
       </p>
@@ -91,7 +91,7 @@ export function DisputeCreatePanel(props: {
         <div className="space-y-1">
           <label
             htmlFor="dispute-reason"
-            className="text-xs font-medium text-zinc-700 dark:text-zinc-300"
+            className="text-xs font-medium text-zinc-200"
           >
             Reason
           </label>
@@ -109,7 +109,7 @@ export function DisputeCreatePanel(props: {
         <div className="space-y-1">
           <label
             htmlFor="dispute-evidence-files"
-            className="text-xs font-medium text-zinc-700 dark:text-zinc-300"
+            className="text-xs font-medium text-zinc-200"
           >
             Evidence files
           </label>
@@ -124,7 +124,7 @@ export function DisputeCreatePanel(props: {
             }}
           />
           {files.length ? (
-            <div className="rounded-lg border border-zinc-200 bg-white p-2 text-xs text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
+            <div className="rounded-lg border border-zinc-800/90 bg-zinc-950/70 p-2 text-xs text-zinc-300">
               {files.map((file) => (
                 <p key={`${file.name}-${file.size}`} className="break-all">
                   {file.name} ({formatFileSize(file.size)})
@@ -135,7 +135,7 @@ export function DisputeCreatePanel(props: {
         </div>
 
         {successMessage ? (
-          <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">
+          <div className="rounded-xl border border-emerald-300/35 bg-emerald-300/10 px-3 py-2 text-xs text-emerald-100">
             {successMessage}
           </div>
         ) : null}
@@ -143,7 +143,7 @@ export function DisputeCreatePanel(props: {
         <FieldError message={errorMessage ?? undefined} className="text-xs" />
 
         <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-          <Button type="button" size="sm" disabled={submitting} onClick={() => void onSubmitDispute()}>
+          <Button type="button" size="sm" className="w-full sm:w-auto" disabled={submitting} onClick={() => void onSubmitDispute()}>
             {submitting ? "Submitting dispute…" : "Submit dispute"}
           </Button>
         </div>

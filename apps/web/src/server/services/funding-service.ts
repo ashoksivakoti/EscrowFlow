@@ -1,9 +1,50 @@
-import { ProjectStatus } from "@prisma/client";
+import { MilestoneStatus, ProjectStatus } from "@prisma/client";
 
 import type { ReconcileFundingBody } from "@/server/validation/schemas/funding";
 import { prisma, prismaInteractiveTransactionOptions } from "@/lib/prisma";
 import { AppError } from "@/server/errors/app-error";
 import { notifyProjectFunded } from "@/server/services/notification-events";
+
+/**
+ * Aligns DB milestone rows with on-chain funding: milestone `i` is fundable when
+ * `fundedWei >= sum(amountWei[0..i])` (same rule as EscrowFlowRegistry cumulative funding).
+ * Only promotes {@link MilestoneStatus.PLANNED} / {@link MilestoneStatus.AWAITING_FUNDS} → {@link MilestoneStatus.FUNDED}.
+ */
+export function milestoneFundingSyncUpdates(
+  milestones: ReadonlyArray<{
+    id: string;
+    sortOrder: number;
+    status: MilestoneStatus;
+    amountWei: string;
+    fundedAt: Date | null;
+  }>,
+  fundedWei: bigint,
+  now: Date,
+): { id: string; status: MilestoneStatus; fundedAt: Date }[] {
+  const sorted = [...milestones].sort((a, b) => {
+    if (a.sortOrder !== b.sortOrder) {
+      return a.sortOrder - b.sortOrder;
+    }
+    return a.id.localeCompare(b.id);
+  });
+
+  const updates: { id: string; status: MilestoneStatus; fundedAt: Date }[] = [];
+  let cumulative = 0n;
+  for (const m of sorted) {
+    cumulative += BigInt(m.amountWei);
+    if (fundedWei < cumulative) {
+      continue;
+    }
+    if (m.status === MilestoneStatus.PLANNED || m.status === MilestoneStatus.AWAITING_FUNDS) {
+      updates.push({
+        id: m.id,
+        status: MilestoneStatus.FUNDED,
+        fundedAt: m.fundedAt ?? now,
+      });
+    }
+  }
+  return updates;
+}
 
 export async function reconcileProjectFunding(
   projectId: string,
@@ -39,6 +80,21 @@ export async function reconcileProjectFunding(
 
   await prisma.$transaction(
     async (tx) => {
+      const milestones = await tx.milestone.findMany({
+        where: { projectId },
+        orderBy: { sortOrder: "asc" },
+        select: { id: true, sortOrder: true, status: true, amountWei: true, fundedAt: true },
+      });
+
+      const now = new Date();
+      const milestoneUpdates = milestoneFundingSyncUpdates(milestones, funded, now);
+      for (const row of milestoneUpdates) {
+        await tx.milestone.update({
+          where: { id: row.id },
+          data: { status: row.status, fundedAt: row.fundedAt },
+        });
+      }
+
       await tx.project.update({
         where: { id: projectId },
         data: {

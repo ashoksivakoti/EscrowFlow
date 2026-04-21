@@ -228,24 +228,31 @@ export function CreateProjectForm() {
 
       {successProjectId ? (
         <div
-          className="space-y-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-5 text-sm dark:border-emerald-900 dark:bg-emerald-950/40"
+          className="mx-4 mb-4 space-y-3 rounded-xl border border-emerald-300/35 bg-emerald-300/10 px-4 py-5 text-sm sm:mx-6 sm:mb-6"
           role="status"
         >
-          <p className="font-medium text-emerald-800 dark:text-emerald-200">
+          <p className="font-medium text-emerald-100">
             Project created successfully.
           </p>
-          <p className="text-emerald-700 dark:text-emerald-300">
-            Project ID: <span className="font-mono">{successProjectId}</span>
+          <p className="text-emerald-100/90">
+            Project ID: <span className="break-all font-mono">{successProjectId}</span>
           </p>
-          <p className="text-emerald-700 dark:text-emerald-300">
+          <p className="text-emerald-100/90">
             Redirecting to dashboard…
           </p>
         </div>
       ) : (
         <form
           onSubmit={(e) => void onSubmit(e)}
-          className="flex w-full max-w-full flex-col gap-6 overflow-x-hidden"
+          className="flex w-full max-w-full flex-col gap-6 overflow-x-hidden px-4 pb-6 sm:px-6"
         >
+          <section className="rounded-xl border border-zinc-800/80 bg-zinc-950/50 p-3 sm:p-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-cyan-200">Project basics</p>
+            <p className="mt-1 text-xs text-zinc-400">
+              Define scope and assign the freelancer wallet for this escrow contract.
+            </p>
+          </section>
+
           <div className="space-y-2">
             <Label htmlFor="title">Project title</Label>
             <Input
@@ -282,54 +289,57 @@ export function CreateProjectForm() {
             />
           </div>
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="chainId">Chain id (optional)</Label>
-              <Input
-                id="chainId"
-                inputMode="numeric"
-                placeholder="31337"
-                aria-invalid={Boolean(form.formState.errors.chainId)}
-                {...form.register("chainId")}
-              />
-              <FieldError message={form.formState.errors.chainId?.message} />
+          <section className="space-y-4 rounded-xl border border-zinc-800/80 bg-zinc-950/45 p-3 sm:p-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-cyan-200">On-chain context</p>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="chainId">Chain id (optional)</Label>
+                <Input
+                  id="chainId"
+                  inputMode="numeric"
+                  placeholder="31337"
+                  aria-invalid={Boolean(form.formState.errors.chainId)}
+                  {...form.register("chainId")}
+                />
+                <FieldError message={form.formState.errors.chainId?.message} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="onChainProjectId">On-chain project id (optional)</Label>
+                <Input
+                  id="onChainProjectId"
+                  inputMode="numeric"
+                  placeholder="1"
+                  aria-invalid={Boolean(form.formState.errors.onChainProjectId)}
+                  {...form.register("onChainProjectId")}
+                />
+                <FieldError message={form.formState.errors.onChainProjectId?.message} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="escrowContractAddress">
+                  Escrow contract address (optional)
+                </Label>
+                <Input
+                  id="escrowContractAddress"
+                  placeholder="0x..."
+                  aria-invalid={Boolean(form.formState.errors.escrowContractAddress)}
+                  {...form.register("escrowContractAddress")}
+                />
+                <FieldError
+                  message={form.formState.errors.escrowContractAddress?.message}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="paymentTokenAddress">Token address (optional)</Label>
+                <Input
+                  id="paymentTokenAddress"
+                  placeholder="0x..."
+                  aria-invalid={Boolean(form.formState.errors.paymentTokenAddress)}
+                  {...form.register("paymentTokenAddress")}
+                />
+                <FieldError message={form.formState.errors.paymentTokenAddress?.message} />
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="onChainProjectId">On-chain project id (optional)</Label>
-              <Input
-                id="onChainProjectId"
-                inputMode="numeric"
-                placeholder="1"
-                aria-invalid={Boolean(form.formState.errors.onChainProjectId)}
-                {...form.register("onChainProjectId")}
-              />
-              <FieldError message={form.formState.errors.onChainProjectId?.message} />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="escrowContractAddress">
-                Escrow contract address (optional)
-              </Label>
-              <Input
-                id="escrowContractAddress"
-                placeholder="0x..."
-                aria-invalid={Boolean(form.formState.errors.escrowContractAddress)}
-                {...form.register("escrowContractAddress")}
-              />
-              <FieldError
-                message={form.formState.errors.escrowContractAddress?.message}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="paymentTokenAddress">Token address (optional)</Label>
-              <Input
-                id="paymentTokenAddress"
-                placeholder="0x..."
-                aria-invalid={Boolean(form.formState.errors.paymentTokenAddress)}
-                {...form.register("paymentTokenAddress")}
-              />
-              <FieldError message={form.formState.errors.paymentTokenAddress?.message} />
-            </div>
-          </div>
+          </section>
 
           <div className="space-y-2">
             <Label htmlFor="agreementFile">Agreement file (optional)</Label>
@@ -348,13 +358,14 @@ export function CreateProjectForm() {
 
           <section className="space-y-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700 dark:text-zinc-300">
+              <h2 className="text-sm font-semibold uppercase tracking-[0.12em] text-zinc-300">
                 Milestones
               </h2>
               <Button
                 type="button"
                 variant="secondary"
                 size="sm"
+                className="w-full sm:w-auto"
                 onClick={() => milestoneArray.append(emptyMilestone)}
               >
                 Add milestone
@@ -364,10 +375,10 @@ export function CreateProjectForm() {
             {milestoneArray.fields.map((field, index) => (
               <div
                 key={field.id}
-                className="space-y-4 rounded-xl border border-zinc-200 bg-zinc-50/70 p-4 dark:border-zinc-800 dark:bg-zinc-900/60"
+                className="space-y-4 rounded-xl border border-zinc-800/90 bg-zinc-950/60 p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-zinc-700/90"
               >
                 <div className="flex items-center justify-between gap-3">
-                  <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                  <h3 className="text-sm font-semibold text-zinc-100">
                     Milestone {index + 1}
                   </h3>
                   <Button
@@ -467,11 +478,11 @@ export function CreateProjectForm() {
             <FieldError message={form.formState.errors.milestones?.message} />
           </section>
 
-          <div className="rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm dark:border-zinc-800 dark:bg-zinc-950">
-            <p className="font-medium text-zinc-800 dark:text-zinc-200">
+          <div className="rounded-xl border border-zinc-800/90 bg-zinc-950/65 px-4 py-3 text-sm">
+            <p className="font-medium text-zinc-200">
               Total milestone amount
             </p>
-            <p className="mt-1 text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+            <p className="mt-1 text-lg font-semibold tracking-tight text-zinc-100">
               {formatBigIntAmount(totalMilestoneAmount)}
             </p>
           </div>
@@ -482,18 +493,19 @@ export function CreateProjectForm() {
             <Button
               type="button"
               variant="secondary"
+              className="w-full sm:w-auto"
               onClick={() => router.push("/dashboard")}
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={form.formState.isSubmitting}>
+            <Button type="submit" className="w-full sm:w-auto" disabled={form.formState.isSubmitting}>
               {form.formState.isSubmitting ? "Creating…" : "Create project"}
             </Button>
           </div>
 
           <p className="text-xs text-zinc-500 dark:text-zinc-400">
             Need a freelancer wallet first? Ask them to sign in once.{" "}
-            <Link href="/login" className="text-indigo-600 hover:underline">
+            <Link href="/login" className="text-cyan-300 hover:text-cyan-200 hover:underline">
               Go to login
             </Link>
             .

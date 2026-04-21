@@ -1,76 +1,309 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 
 import { BrandMark } from "@escrowflow/ui";
 
+import { buttonClassName } from "@/components/ui/button";
+import { cardSurfaceClassName } from "@/components/ui/card";
+import { cn } from "@/lib/cn";
+
 export default function HomePage() {
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-5xl flex-col gap-10 overflow-x-hidden px-4 py-10 sm:gap-12 sm:px-6 sm:py-14 lg:px-8">
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-5">
-        <BrandMark />
-        <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-wide text-indigo-600 dark:text-indigo-400">
-            EscrowFlow
-          </p>
-          <h1 className="text-balance text-2xl font-semibold tracking-tight text-zinc-900 dark:text-white sm:text-3xl">
-            Milestone-based crypto escrow built for modern freelance teams
-          </h1>
-        </div>
-      </header>
+    <main className="relative min-h-dvh overflow-x-hidden bg-zinc-950 text-zinc-100">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(90%_55%_at_50%_0%,rgba(34,211,238,0.16)_0%,rgba(2,6,23,0)_65%)]"
+      />
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-200/70 to-transparent"
+      />
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute -left-28 top-24 h-72 w-72 rounded-full bg-cyan-300/15 blur-[110px]"
+      />
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute -right-24 top-48 h-72 w-72 rounded-full bg-cyan-500/12 blur-[120px]"
+      />
 
-      <p className="max-w-3xl text-pretty text-base leading-relaxed text-zinc-600 dark:text-zinc-400">
-        Clients fund milestones in stablecoins, freelancers submit verifiable
-        work packages, and both sides keep a transparent on-chain + IPFS audit
-        trail from kickoff to payout.
-      </p>
+      <section className="relative z-10 mx-auto flex w-full max-w-6xl flex-col gap-12 px-4 py-8 sm:gap-16 sm:px-6 sm:py-12 lg:px-8 lg:py-16">
+        <header className="flex flex-col gap-6 lg:gap-8">
+          <div className="flex items-center gap-4">
+            <BrandMark />
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-cyan-300">
+              EscrowFlow
+            </p>
+          </div>
 
-      <div className="flex w-full max-w-full flex-col gap-3 sm:flex-row sm:flex-wrap">
-        <Link
-          href="/login"
-          className="inline-flex min-h-12 items-center justify-center rounded-xl bg-indigo-600 px-5 text-center text-sm font-medium text-white shadow-sm transition hover:bg-indigo-500 active:bg-indigo-700"
+          <div className="max-w-4xl space-y-5">
+            <h1 className="text-balance text-[1.95rem] font-semibold tracking-[-0.02em] text-white sm:text-5xl lg:text-[3.65rem] lg:leading-[1.03]">
+              Milestone escrow for Web3 teams that want trust, speed, and certainty.
+            </h1>
+            <p className="max-w-3xl text-pretty text-sm leading-relaxed text-zinc-300 sm:text-base lg:text-[1.08rem] lg:leading-relaxed">
+              Fund once, release by milestone, and keep every delivery verifiable with on-chain
+              payments plus IPFS-backed work artifacts. Built for premium freelancer and client
+              workflows.
+            </p>
+          </div>
+
+          <div className="flex w-full max-w-full flex-col gap-3 sm:flex-row sm:flex-wrap">
+            <Link
+              href="/login"
+              className={buttonClassName({
+                variant: "primary",
+                size: "lg",
+                className: "w-full sm:w-auto",
+              })}
+            >
+              Sign in with wallet
+            </Link>
+            <Link
+              href="/dashboard"
+              className={buttonClassName({
+                variant: "secondary",
+                size: "lg",
+                className: "w-full sm:w-auto",
+              })}
+            >
+              Explore dashboard
+            </Link>
+          </div>
+
+          <div className="grid grid-cols-1 gap-2.5 text-xs text-zinc-400 sm:grid-cols-3 sm:gap-3">
+            {[
+              "Wallet-native SIWE authentication",
+              "IPFS-backed milestone evidence",
+              "Escrow-first release controls",
+            ].map((item) => (
+              <div
+                key={item}
+                className="rounded-lg border border-zinc-800/85 bg-zinc-900/50 px-3 py-2.5 text-center sm:text-left"
+              >
+                {item}
+              </div>
+            ))}
+          </div>
+        </header>
+
+        <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <StatTile label="Escrow safety" value="On-chain enforced" />
+          <StatTile label="Proof of delivery" value="IPFS artifacts" />
+          <StatTile label="Payout control" value="Milestone by milestone" />
+          <StatTile label="Dispute readiness" value="Structured resolution" />
+        </section>
+
+        <SectionBlock
+          title="Feature highlights"
+          subtitle="A premium execution layer for milestone contracts, visibility, and payout confidence."
         >
-          Sign in with wallet
-        </Link>
-        <Link
-          href="/dashboard"
-          className="inline-flex min-h-12 items-center justify-center rounded-xl border border-zinc-200 bg-white px-5 text-center text-sm font-medium text-zinc-900 shadow-sm transition hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white dark:hover:bg-zinc-800"
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {[
+              {
+                title: "Secure milestone funding",
+                description:
+                  "Clients lock project value in escrow and release milestone payouts with clear state transitions.",
+              },
+              {
+                title: "Immutable work proofs",
+                description:
+                  "Deliverables, metadata, and evidence are tracked through IPFS references for transparent history.",
+              },
+              {
+                title: "Real-time status clarity",
+                description:
+                  "Funding, submissions, reviews, and disputes stay synchronized across dashboard and project views.",
+              },
+              {
+                title: "Role-aware workflows",
+                description:
+                  "Client and freelancer experiences are tailored for approvals, submissions, and payout actions.",
+              },
+              {
+                title: "Production-grade dispute flow",
+                description:
+                  "Escalate, review, and resolve conflicts with a complete audit trail and controlled release paths.",
+              },
+              {
+                title: "Web3-native sign-in",
+                description:
+                  "SIWE wallet authentication keeps onboarding seamless while preserving security and user control.",
+              },
+            ].map((feature) => (
+              <FeatureCard
+                key={feature.title}
+                title={feature.title}
+                description={feature.description}
+              />
+            ))}
+          </div>
+        </SectionBlock>
+
+        <SectionBlock
+          title="How it works"
+          subtitle="A clear, frictionless lifecycle from kickoff to payout."
         >
-          Open dashboard
-        </Link>
-      </div>
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-4">
+            {[
+              ["1. Create", "Set milestones, terms, and funding context."],
+              ["2. Fund", "Lock escrow to activate trust before delivery."],
+              ["3. Deliver", "Freelancer submits milestone evidence and notes."],
+              ["4. Release", "Approve work and release milestone payouts."],
+            ].map(([step, text]) => (
+              <div
+                key={step}
+                className={cn(cardSurfaceClassName, "flex flex-col gap-2 p-4 sm:p-5")}
+              >
+                <p className="text-sm font-semibold tracking-wide text-cyan-200">{step}</p>
+                <p className="text-sm leading-relaxed text-zinc-300">{text}</p>
+              </div>
+            ))}
+          </div>
+        </SectionBlock>
 
-      <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <FeatureCard
-          title="Secure milestone funding"
-          description="Escrow deposits and releases are tracked on-chain, reducing payment ambiguity."
-        />
-        <FeatureCard
-          title="IPFS-backed submissions"
-          description="Deliverables and evidence use immutable content addressing for durable auditability."
-        />
-        <FeatureCard
-          title="Dispute-ready workflow"
-          description="Structured dispute handling with arbitrator/admin resolution and synced history."
-        />
-      </section>
+        <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <SectionBlock
+            title="Why milestone escrow"
+            subtitle="Reduce payment risk and remove ambiguity in project execution."
+          >
+            <ul className="space-y-3 text-sm leading-relaxed text-zinc-300">
+              <li>• Funds are committed upfront, so both parties align on execution confidence.</li>
+              <li>• Payouts map directly to delivered outcomes instead of vague project stages.</li>
+              <li>• Every state change is traceable, reducing disputes and negotiation overhead.</li>
+            </ul>
+          </SectionBlock>
 
-      <section className="rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900/50 sm:p-5">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700 dark:text-zinc-300">
-          Typical flow
-        </h2>
-        <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-          Connect wallet → complete onboarding → create project + milestones →
-          fund escrow → submit work → approve and release.
-        </p>
+          <SectionBlock
+            title="Trust, security, and value"
+            subtitle="Enterprise-grade clarity with startup-friendly speed."
+          >
+            <ul className="space-y-3 text-sm leading-relaxed text-zinc-300">
+              <li>• Wallet-native auth and contract interactions keep custody assumptions explicit.</li>
+              <li>• IPFS-linked submissions preserve deliverable integrity and review transparency.</li>
+              <li>• Unified event and notification stream keeps teams aligned without manual chasing.</li>
+            </ul>
+          </SectionBlock>
+        </section>
+
+        <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <SectionBlock
+            title="For clients"
+            subtitle="Control risk, streamline approvals, and ship with confidence."
+          >
+            <ul className="space-y-2.5 text-sm text-zinc-300">
+              <li>• Structured milestone approvals and payout controls</li>
+              <li>• Complete audit trail for every release decision</li>
+              <li>• Cleaner collaboration with less payment friction</li>
+            </ul>
+          </SectionBlock>
+
+          <SectionBlock
+            title="For freelancers"
+            subtitle="Get paid fairly for verified progress."
+          >
+            <ul className="space-y-2.5 text-sm text-zinc-300">
+              <li>• Clear payout milestones and delivery expectations</li>
+              <li>• Transparent submission and review lifecycle</li>
+              <li>• Faster trust-building with premium clients</li>
+            </ul>
+          </SectionBlock>
+        </section>
+
+        <section
+          className={cn(
+            cardSurfaceClassName,
+            "relative overflow-hidden p-5 sm:p-8 lg:p-10",
+          )}
+        >
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 bg-[radial-gradient(80%_80%_at_20%_20%,rgba(34,211,238,0.18)_0%,rgba(34,211,238,0)_70%)]"
+          />
+          <div className="relative z-10 flex flex-col gap-5">
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-cyan-300">
+                Ready to upgrade escrow operations?
+              </p>
+              <h2 className="text-balance text-2xl font-semibold tracking-tight text-white sm:text-3xl">
+                Launch premium milestone contracts in minutes.
+              </h2>
+              <p className="max-w-2xl text-sm leading-relaxed text-zinc-300 sm:text-base">
+                Start with wallet sign-in, complete onboarding, and move from project setup to
+                secure release flows with full visibility.
+              </p>
+            </div>
+            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+              <Link
+                href="/login"
+                className={buttonClassName({
+                  variant: "primary",
+                  size: "lg",
+                  className: "w-full sm:w-auto",
+                })}
+              >
+                Get started
+              </Link>
+              <Link
+                href="/dashboard"
+                className={buttonClassName({
+                  variant: "secondary",
+                  size: "lg",
+                  className: "w-full sm:w-auto",
+                })}
+              >
+                View product
+              </Link>
+            </div>
+          </div>
+        </section>
       </section>
     </main>
   );
 }
 
+function StatTile({ label, value }: { label: string; value: string }) {
+  return (
+    <div className={cn(cardSurfaceClassName, "p-4 sm:p-5", "hover:-translate-y-0.5 hover:border-zinc-700/90")}>
+      <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-zinc-400">{label}</p>
+      <p className="mt-2 text-base font-semibold text-zinc-100 sm:text-lg">{value}</p>
+    </div>
+  );
+}
+
+function SectionBlock({
+  title,
+  subtitle,
+  children,
+}: {
+  title: string;
+  subtitle: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <h2 className="text-balance text-2xl font-semibold tracking-tight text-white sm:text-3xl">
+          {title}
+        </h2>
+        <p className="max-w-3xl text-sm leading-relaxed text-zinc-300 sm:text-base">{subtitle}</p>
+      </div>
+      <div className="h-px w-full bg-gradient-to-r from-transparent via-cyan-300/25 to-transparent" />
+      {children}
+    </div>
+  );
+}
+
 function FeatureCard({ title, description }: { title: string; description: string }) {
   return (
-    <div className="rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900/60">
-      <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{title}</p>
-      <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">{description}</p>
+    <div
+      className={cn(
+        cardSurfaceClassName,
+        "flex flex-col gap-2 p-4 sm:p-5",
+        "hover:-translate-y-0.5 hover:border-zinc-700/90 hover:shadow-[0_20px_40px_-24px_rgba(0,0,0,0.95),0_0_0_1px_rgba(34,211,238,0.1)]",
+      )}
+    >
+      <p className="text-base font-semibold tracking-tight text-zinc-100">{title}</p>
+      <p className="text-sm leading-relaxed text-zinc-300">{description}</p>
     </div>
   );
 }

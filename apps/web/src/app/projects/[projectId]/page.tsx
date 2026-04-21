@@ -64,20 +64,20 @@ export default function ProjectDetailShellPage() {
           <p className="text-sm text-zinc-600 dark:text-zinc-400">Loading project...</p>
         </div>
       ) : (
-        <div className="flex flex-col gap-5">
-          <Card>
+        <div className="flex w-full max-w-full flex-col gap-5">
+          <Card className="overflow-hidden">
             <CardHeader>
-              <CardTitle>{project.title}</CardTitle>
+              <CardTitle className="text-2xl tracking-tight sm:text-3xl">{project.title}</CardTitle>
               <CardDescription>
                 {project.description?.trim() ? project.description : "No description provided yet."}
               </CardDescription>
             </CardHeader>
             {isProjectClient && project.status === "OPEN" ? (
-              <div className="mx-4 mb-4 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 dark:border-indigo-900 dark:bg-indigo-950/40 sm:mx-6">
-                <p className="text-sm font-medium text-indigo-900 dark:text-indigo-100">
+              <div className="mx-4 mb-4 rounded-xl border border-cyan-300/30 bg-cyan-300/10 px-4 py-3 sm:mx-6">
+                <p className="text-sm font-medium text-cyan-100">
                   This project is on the marketplace.
                 </p>
-                <p className="mt-1 text-xs text-indigo-800 dark:text-indigo-200">
+                <p className="mt-1 text-xs text-cyan-200/85">
                   Review freelancer applications, then accept one to assign and start escrow.
                 </p>
                 <Link
@@ -92,7 +92,7 @@ export default function ProjectDetailShellPage() {
                 </Link>
               </div>
             ) : null}
-            <div className="grid grid-cols-1 gap-3 text-xs text-zinc-600 dark:text-zinc-400 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 px-4 text-xs text-zinc-600 dark:text-zinc-400 sm:grid-cols-2 sm:px-6 lg:grid-cols-3">
               <Info label="Status" value={prettyStatus(project.status)} />
               <Info label="Total amount" value={formatWei(project.totalValueWei ?? "0")} />
               <Info label="Funded amount" value={formatWei(project.fundedAmountWei)} />
@@ -114,7 +114,7 @@ export default function ProjectDetailShellPage() {
             </div>
 
             {project.agreementLinks.length > 0 ? (
-              <div className="mt-4 rounded-xl border border-zinc-200 p-3 dark:border-zinc-800">
+              <div className="mx-4 mt-4 rounded-xl border border-zinc-800/90 p-3 sm:mx-6">
                 <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
                   Agreement links
                 </p>
@@ -125,7 +125,7 @@ export default function ProjectDetailShellPage() {
                       href={toGatewayUrl(link)}
                       target="_blank"
                       rel="noreferrer"
-                      className="break-all text-sm text-indigo-600 hover:underline dark:text-indigo-400"
+                      className="break-all text-sm text-cyan-300 hover:text-cyan-200 hover:underline"
                     >
                       {link}
                     </a>
@@ -134,12 +134,12 @@ export default function ProjectDetailShellPage() {
               </div>
             ) : null}
 
-            <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:justify-end">
-              <Button variant="secondary" onClick={() => router.push("/projects")}>
+            <div className="mt-4 flex flex-col gap-3 px-4 pb-4 sm:flex-row sm:justify-end sm:px-6 sm:pb-6">
+              <Button variant="secondary" className="w-full sm:w-auto" onClick={() => router.push("/projects")}>
                 Back to projects
               </Button>
               {project.status === "AWAITING_ESCROW" ? (
-                <Button onClick={() => router.push(`/projects/${project.id}/funding`)}>
+                <Button className="w-full sm:w-auto" onClick={() => router.push(`/projects/${project.id}/funding`)}>
                   Open funding
                 </Button>
               ) : null}
@@ -147,21 +147,21 @@ export default function ProjectDetailShellPage() {
           </Card>
 
           {project.openDispute ? (
-            <Card className="border-amber-200 bg-amber-50/50 dark:border-amber-900 dark:bg-amber-950/30">
+          <Card className="border-amber-300/35 bg-amber-300/10">
               <CardHeader>
                 <CardTitle className="text-lg">Dispute requires attention</CardTitle>
                 <CardDescription>
                   {project.openDispute.title ?? "Open dispute"} · {prettyStatus(project.openDispute.status)}
                 </CardDescription>
               </CardHeader>
-              <p className="break-words text-sm text-amber-900 dark:text-amber-200">
+              <p className="px-4 break-words text-sm text-amber-900 dark:text-amber-200 sm:px-6">
                 {project.openDispute.description}
               </p>
               <a
                 href={toGatewayUrl(project.openDispute.evidenceIpfsUri)}
                 target="_blank"
                 rel="noreferrer"
-                className="mt-2 inline-block break-all text-xs text-amber-900 underline dark:text-amber-200"
+                className="mx-4 mt-2 inline-block break-all text-xs text-amber-900 underline dark:text-amber-200 sm:mx-6"
               >
                 Evidence package: {project.openDispute.evidenceIpfsUri}
               </a>
@@ -175,7 +175,7 @@ export default function ProjectDetailShellPage() {
                 Delivery progress, latest submission snapshot, and dispute state per milestone.
               </CardDescription>
             </CardHeader>
-            <div className="space-y-3">
+            <div className="space-y-3 px-4 pb-4 sm:px-6 sm:pb-6">
               {project.milestones.length === 0 ? (
                 <EmptyState
                   title="No milestones yet"
@@ -183,10 +183,10 @@ export default function ProjectDetailShellPage() {
                 />
               ) : (
                 project.milestones.map((milestone) => (
-                  <div key={milestone.id} className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">
+                  <div key={milestone.id} className="min-w-0 rounded-xl border border-zinc-800/90 bg-zinc-950/55 p-4 transition-all duration-200 hover:border-zinc-700/90">
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                       <div className="min-w-0">
-                        <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                        <p className="break-words text-sm font-semibold text-zinc-900 dark:text-zinc-100">
                           {milestone.sortOrder + 1}. {milestone.title}
                         </p>
                         <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
@@ -221,6 +221,7 @@ export default function ProjectDetailShellPage() {
                           <Button
                             type="button"
                             size="sm"
+                            className="w-full sm:w-auto"
                             onClick={() =>
                               router.push(
                                 `/projects/${project.id}/milestones/${milestone.id}/submit`,
@@ -283,7 +284,7 @@ export default function ProjectDetailShellPage() {
                 </CardDescription>
               </CardHeader>
               {project.latestSubmission ? (
-                <div className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">
+                <div className="mx-4 rounded-xl border border-zinc-800/90 p-4 sm:mx-6">
                   <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
                     Status: {prettyStatus(project.latestSubmission.status)}
                   </p>
@@ -303,7 +304,7 @@ export default function ProjectDetailShellPage() {
                         href={project.latestSubmission.externalLink}
                         target="_blank"
                         rel="noreferrer"
-                        className="break-all text-indigo-600 hover:underline dark:text-indigo-400"
+                        className="break-all text-cyan-300 hover:text-cyan-200 hover:underline"
                       >
                         {project.latestSubmission.externalLink}
                       </a>
@@ -316,7 +317,7 @@ export default function ProjectDetailShellPage() {
                         href={toGatewayUrl(project.latestSubmission.metadataIpfsUri)}
                         target="_blank"
                         rel="noreferrer"
-                        className="break-all text-indigo-600 hover:underline dark:text-indigo-400"
+                        className="break-all text-cyan-300 hover:text-cyan-200 hover:underline"
                       >
                         {project.latestSubmission.metadataIpfsUri}
                       </a>
@@ -334,7 +335,7 @@ export default function ProjectDetailShellPage() {
                           href={toGatewayUrl(file.uri)}
                           target="_blank"
                           rel="noreferrer"
-                          className="block break-all text-xs text-indigo-600 hover:underline dark:text-indigo-400"
+                          className="block break-all text-xs text-cyan-300 hover:text-cyan-200 hover:underline"
                         >
                           {file.fileName} ({formatFileSize(file.sizeBytes)})
                         </a>
@@ -374,7 +375,7 @@ export default function ProjectDetailShellPage() {
                   Synced blockchain events for this project.
                 </CardDescription>
               </CardHeader>
-              <div className="space-y-3">
+              <div className="space-y-3 px-4 pb-4 sm:px-6 sm:pb-6">
                 {project.recentTransactions.length === 0 ? (
                   <EmptyState
                     title="No on-chain transactions yet"
@@ -384,7 +385,7 @@ export default function ProjectDetailShellPage() {
                   project.recentTransactions.map((tx) => (
                     <div
                       key={`${tx.txHash}-${tx.logIndex}`}
-                      className="rounded-xl border border-zinc-200 p-3 dark:border-zinc-800"
+                      className="rounded-xl border border-zinc-800/90 p-3"
                     >
                       <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                         <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
@@ -405,9 +406,9 @@ export default function ProjectDetailShellPage() {
                             href={getExplorerTxUrl(tx.chainId ?? project.chainId, tx.txHash)!}
                             target="_blank"
                             rel="noreferrer"
-                            className="font-medium text-indigo-600 hover:underline dark:text-indigo-400"
+                            className="font-medium text-cyan-300 hover:text-cyan-200 hover:underline"
                           >
-                            • View on explorer
+                            View on explorer
                           </a>
                         ) : null}
                       </div>
@@ -433,9 +434,9 @@ function Info({
   fullValue?: string;
 }) {
   return (
-    <div className="rounded-xl border border-zinc-200 px-3 py-2 dark:border-zinc-800">
-      <p className="text-[10px] uppercase tracking-wide">{label}</p>
-      <p className="mt-1 break-all text-sm font-medium text-zinc-800 dark:text-zinc-200" title={fullValue}>
+    <div className="rounded-xl border border-zinc-800/90 bg-zinc-950/60 px-3 py-2">
+      <p className="text-[10px] uppercase tracking-wide text-zinc-500">{label}</p>
+      <p className="mt-1 break-all text-sm font-medium text-zinc-200" title={fullValue}>
         {value}
       </p>
     </div>
@@ -444,16 +445,16 @@ function Info({
 
 function EmptyState({ title, description }: { title: string; description: string }) {
   return (
-    <div className="rounded-xl border border-dashed border-zinc-300 px-4 py-5 text-center dark:border-zinc-700">
-      <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{title}</p>
-      <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">{description}</p>
+    <div className="rounded-xl border border-dashed border-zinc-700/80 bg-zinc-950/45 px-4 py-5 text-center">
+      <p className="text-sm font-medium text-zinc-100">{title}</p>
+      <p className="mt-1 text-xs text-zinc-400">{description}</p>
     </div>
   );
 }
 
 function StatusBadge({ label }: { label: string }) {
   return (
-    <span className="inline-flex items-center rounded-full border border-zinc-300 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-zinc-600 dark:border-zinc-700 dark:text-zinc-300">
+    <span className="inline-flex items-center rounded-full border border-cyan-300/30 bg-cyan-300/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-cyan-200">
       {label}
     </span>
   );

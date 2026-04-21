@@ -46,12 +46,13 @@ export default function LoginPage() {
     <AuthShell
       title="Sign in"
       subtitle="Connect your wallet and sign a one-time message. No gas transaction is sent."
+      containerClassName="max-w-xl"
     >
-      <Card className="w-full max-w-full">
+      <Card className="w-full max-w-full border-cyan-300/20 shadow-[0_24px_60px_-30px_rgba(34,211,238,0.35)]">
         {showSpinner ? (
           <div className="flex flex-col items-center justify-center gap-4 py-16">
             <Spinner />
-            <p className="text-sm text-zinc-600 dark:text-zinc-400">
+            <p className="text-sm text-zinc-400">
               Checking session and wallet state...
             </p>
           </div>

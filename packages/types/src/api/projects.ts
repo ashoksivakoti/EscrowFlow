@@ -63,6 +63,15 @@ export type GetProjectResponse = {
   project: ProjectDetail;
 };
 
+/** Client submits the registry id returned from `EscrowFlowRegistry.createProject`. */
+export type ConfirmProjectOnChainBindingRequest = {
+  onChainProjectId: string;
+};
+
+export type ConfirmProjectOnChainBindingResponse = {
+  project: ProjectDetail;
+};
+
 export type UpdateProjectRequest = {
   title?: string;
   description?: string | null;

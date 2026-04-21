@@ -131,6 +131,8 @@ export type {
   CreateProjectRequest,
   CreateProjectResponse,
   GetProjectResponse,
+  ConfirmProjectOnChainBindingRequest,
+  ConfirmProjectOnChainBindingResponse,
   UpdateProjectRequest,
   UpdateProjectResponse,
   AssignFreelancerRequest,

@@ -1,11 +1,54 @@
 export const escrowRegistryAbi = [
   {
+    type: "event",
+    name: "ProjectCreated",
+    inputs: [
+      { name: "projectId", type: "uint256", indexed: true },
+      { name: "client", type: "address", indexed: true },
+      { name: "freelancer", type: "address", indexed: true },
+      { name: "token", type: "address", indexed: false },
+      { name: "totalAmount", type: "uint256", indexed: false },
+      { name: "metadataURI", type: "string", indexed: false },
+      { name: "milestoneCount", type: "uint256", indexed: false },
+    ],
+  },
+  {
+    type: "function",
+    name: "createProject",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "freelancer", type: "address" },
+      { name: "token", type: "address" },
+      { name: "metadataURI", type: "string" },
+      {
+        name: "milestoneInputs",
+        type: "tuple[]",
+        components: [
+          { name: "amount", type: "uint256" },
+          { name: "deadline", type: "uint64" },
+        ],
+      },
+    ],
+    outputs: [{ name: "projectId", type: "uint256" }],
+  },
+  {
     type: "function",
     name: "fundProject",
     stateMutability: "nonpayable",
     inputs: [
       { name: "projectId", type: "uint256" },
       { name: "amount", type: "uint256" },
+    ],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "submitMilestone",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "projectId", type: "uint256" },
+      { name: "milestoneIndex", type: "uint256" },
+      { name: "submissionURI", type: "string" },
     ],
     outputs: [],
   },
