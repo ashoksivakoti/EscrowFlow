@@ -43,7 +43,6 @@ const FL_ID = "freelancer_1";
 const FL2_ID = "freelancer_2";
 const PROJECT_ID = "proj_1";
 const APP_1 = "app_1";
-const APP_2 = "app_2";
 
 const openPublicProject = {
   id: PROJECT_ID,

@@ -1,8 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MilestoneStatus, ProjectStatus, SubmissionStatus } from "@prisma/client";
 
-import { AppError } from "@/server/errors/app-error";
-
 const { prismaMock, uploadFileToIpfsMock, uploadJsonToIpfsMock } = vi.hoisted(() => ({
   prismaMock: {
     milestone: {
