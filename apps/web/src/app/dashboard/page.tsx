@@ -6,6 +6,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { LogOut } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import type { DashboardActionItem, DashboardRecentTransaction } from "@escrowflow/types";
+import { useAccount, useBalance, useChainId } from "wagmi";
+import { arbitrumSepolia, baseSepolia, hardhat, mainnet, sepolia } from "wagmi/chains";
 
 import { AuthShell } from "@/components/layout/auth-shell";
 import { IdentityCard as DashboardIdentityCard, type IdentityRole } from "@/components/dashboard/identity-card";
@@ -27,6 +29,15 @@ export default function DashboardPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [signingOut, setSigningOut] = useState(false);
+  const walletChainId = useChainId();
+  const { address: walletAddress } = useAccount();
+  const { data: walletNativeBalance, isLoading: walletBalanceLoading } = useBalance({
+    address: walletAddress,
+    chainId: walletChainId,
+    query: {
+      enabled: Boolean(walletAddress && walletChainId),
+    },
+  });
   const { data: session, isPending: sessionLoading } = useSessionQuery();
   const meEnabled = Boolean(session?.authenticated);
   const { data: me, isPending: meLoading, isFetched: meFetched } =
@@ -105,21 +116,11 @@ export default function DashboardPage() {
   const identityRole: IdentityRole | null = me
     ? dashboardLens ?? resolveIdentityRole(me.roles)
     : null;
-  const identityBalance =
-    identityRole === "CLIENT"
-      ? `${formatWei(clientDashboard?.summary.totalEscrowLockedWei ?? "0")} units`
-      : identityRole === "FREELANCER"
-        ? `${formatWei(freelancerDashboard?.summary.releasedEarningsWei ?? "0")} units`
-        : identityRole === "ADMIN"
-          ? "System scope"
-          : "--";
+  const identityBalance = walletBalanceLoading
+    ? "Loading..."
+    : formatNativeBalance(walletNativeBalance?.formatted, walletNativeBalance?.symbol);
   const identityCompanyName = "EscrowFlow";
-  const identityNetwork =
-    identityRole === "ADMIN"
-      ? "EscrowFlow Core"
-      : identityRole === "CLIENT"
-        ? "EscrowFlow Network"
-        : "EscrowFlow Network";
+  const identityNetwork = resolveNetworkName(walletChainId);
   const rightPane = me && identityRole ? (
     <div>
       <DashboardIdentityCard
@@ -926,6 +927,36 @@ function formatWei(raw: string): string {
   } catch {
     return raw;
   }
+}
+
+function formatNativeBalance(formatted?: string, symbol?: string): string {
+  if (!formatted || !symbol) {
+    return "--";
+  }
+  const parsed = Number.parseFloat(formatted);
+  if (Number.isNaN(parsed)) {
+    return `-- ${symbol}`;
+  }
+  return `${parsed.toFixed(4)} ${symbol}`;
+}
+
+function resolveNetworkName(chainId: number): string {
+  if (chainId === arbitrumSepolia.id) {
+    return arbitrumSepolia.name;
+  }
+  if (chainId === baseSepolia.id) {
+    return baseSepolia.name;
+  }
+  if (chainId === sepolia.id) {
+    return sepolia.name;
+  }
+  if (chainId === hardhat.id) {
+    return "Hardhat Local";
+  }
+  if (chainId === mainnet.id) {
+    return mainnet.name;
+  }
+  return `Chain ${chainId}`;
 }
 
 function formatTimeAgo(raw: string): string {
