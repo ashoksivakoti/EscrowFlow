@@ -38,6 +38,22 @@ function milestone(
   return { amount, deadline };
 }
 
+/** Sum of `(funded - released - refunded)` for every project using `tokenAddress` (matches `_tokenOutstanding`). */
+async function sumLiabilityForToken(
+  registry: EscrowFlowRegistry,
+  tokenAddress: string,
+  lastProjectId: bigint,
+): Promise<bigint> {
+  let sum = 0n;
+  const target = tokenAddress.toLowerCase();
+  for (let pid = 1n; pid <= lastProjectId; pid++) {
+    const p = await registry.getProject(pid);
+    if (p.token.toLowerCase() !== target) continue;
+    sum += p.fundedAmount - p.releasedAmount - p.refundedAmount;
+  }
+  return sum;
+}
+
 describe("EscrowFlowRegistry", function () {
   describe("createProject", function () {
     it("creates a valid project with milestones and emits ProjectCreated", async function () {
@@ -354,6 +370,39 @@ describe("EscrowFlowRegistry", function () {
       await expect(
         registry.connect(client).fundProject(1n, amount),
       ).to.be.revertedWithCustomError(registry, "InvalidFundingTransfer");
+    });
+
+    it("registry token balance equals summed liability plus untracked (invariant check)", async function () {
+      const [admin, client, freelancer] = await ethers.getSigners();
+      const registry = await deployRegistry(admin);
+      const token = await deployAndAllowMock(registry, admin, admin);
+      const tokenAddr = await token.getAddress();
+      const regAddr = await registry.getAddress();
+
+      const a = 400_000n;
+      const b = 600_000n;
+      await token.connect(admin).mint(await client.getAddress(), (a + b) * 2n);
+
+      await registry
+        .connect(client)
+        .createProject(await freelancer.getAddress(), tokenAddr, "", [milestone(a, 1n)]);
+      await registry
+        .connect(client)
+        .createProject(await freelancer.getAddress(), tokenAddr, "", [milestone(b, 1n)]);
+      await token.connect(client).approve(regAddr, a + b);
+      await registry.connect(client).fundProject(1n, a);
+      await registry.connect(client).fundProject(2n, b);
+
+      const liq = await sumLiabilityForToken(registry, tokenAddr, 2n);
+      const untracked = await registry.untrackedTokenBalance(tokenAddr);
+      const bal = await token.balanceOf(regAddr);
+      expect(liq).to.equal(a + b);
+      expect(bal).to.equal(liq + untracked);
+
+      const extra = 25_000n;
+      await token.connect(client).transfer(regAddr, extra);
+      expect(await registry.untrackedTokenBalance(tokenAddr)).to.equal(extra);
+      expect(await token.balanceOf(regAddr)).to.equal(liq + extra);
     });
   });
 
@@ -722,6 +771,7 @@ describe("EscrowFlowRegistry", function () {
       const d = await registry.getDispute(1n, 0n);
       expect(d.active).to.equal(true);
       expect(d.raisedBy).to.equal(await client.getAddress());
+      expect(d.lastAppendedEvidenceURI).to.equal("");
     });
 
     it("reverts dispute raise from a non-participant", async function () {
@@ -961,7 +1011,7 @@ describe("EscrowFlowRegistry", function () {
       ).to.be.revertedWithCustomError(registry, "NotAuthorizedToRaiseDispute");
     });
 
-    it("allows freelancer submission after client front-runs with pending dispute", async function () {
+    it("reverts submit while a deadline dispute is active on that milestone", async function () {
       const [admin, arb, client, freelancer] = await ethers.getSigners();
       const registry = await deployRegistryWithArb(admin, arb);
       const token = await deployAndAllowMock(registry, admin, admin);
@@ -979,12 +1029,95 @@ describe("EscrowFlowRegistry", function () {
       await token.connect(client).approve(await registry.getAddress(), amount);
       await registry.connect(client).fundProject(1n, amount);
 
-      // Simulate mempool front-run ordering: dispute gets mined first.
-      await registry.connect(client).raiseDispute(1n, 0n, "ipfs://front-run");
+      await registry.connect(client).raiseDispute(1n, 0n, "ipfs://deadline-dispute");
 
       await expect(
         registry.connect(freelancer).submitMilestone(1n, 0n, "ipfs://work"),
-      ).to.emit(registry, "MilestoneSubmitted");
+      ).to.be.revertedWithCustomError(registry, "DisputeActive");
+    });
+
+    it("emits DisputeEvidenceAppended for party during active dispute", async function () {
+      const [admin, arb, client, freelancer] = await ethers.getSigners();
+      const registry = await deployRegistryWithArb(admin, arb);
+      const token = await deployAndAllowMock(registry, admin, admin);
+      const amount = 200n;
+      await token.connect(admin).mint(await client.getAddress(), amount * 10n);
+
+      await registry
+        .connect(client)
+        .createProject(await freelancer.getAddress(), await token.getAddress(), "", [
+          milestone(amount, 1n),
+        ]);
+      await token.connect(client).approve(await registry.getAddress(), amount);
+      await registry.connect(client).fundProject(1n, amount);
+      await registry.connect(freelancer).submitMilestone(1n, 0n, "ipfs://a");
+      await registry.connect(client).raiseDispute(1n, 0n, "ipfs://d");
+
+      const ev = "ipfs://extra-evidence";
+      await expect(registry.connect(freelancer).appendDisputeEvidence(1n, 0n, ev))
+        .to.emit(registry, "DisputeEvidenceAppended")
+        .withArgs(1n, 0n, await freelancer.getAddress(), ev);
+
+      const d = await registry.getDispute(1n, 0n);
+      expect(d.lastAppendedEvidenceURI).to.equal(ev);
+    });
+
+    it("reverts appendDisputeEvidence for non-party or without active dispute", async function () {
+      const [admin, arb, client, freelancer, stranger] = await ethers.getSigners();
+      const registry = await deployRegistryWithArb(admin, arb);
+      const token = await deployAndAllowMock(registry, admin, admin);
+      const amount = 200n;
+      await token.connect(admin).mint(await client.getAddress(), amount * 10n);
+
+      await registry
+        .connect(client)
+        .createProject(await freelancer.getAddress(), await token.getAddress(), "", [
+          milestone(amount, 1n),
+        ]);
+      await token.connect(client).approve(await registry.getAddress(), amount);
+      await registry.connect(client).fundProject(1n, amount);
+      await registry.connect(freelancer).submitMilestone(1n, 0n, "ipfs://a");
+      await registry.connect(client).raiseDispute(1n, 0n, "ipfs://d");
+
+      await expect(
+        registry.connect(stranger).appendDisputeEvidence(1n, 0n, "ipfs://x"),
+      ).to.be.revertedWithCustomError(registry, "NotAuthorizedToRaiseDispute");
+
+      await registry.connect(client).appendDisputeEvidence(1n, 0n, "ipfs://before-resolve");
+      expect((await registry.getDispute(1n, 0n)).lastAppendedEvidenceURI).to.equal("ipfs://before-resolve");
+
+      await registry.connect(arb).resolveDispute(1n, 0n, Resolution.ReleaseToFreelancer, amount, 0n);
+
+      expect((await registry.getDispute(1n, 0n)).lastAppendedEvidenceURI).to.equal("");
+
+      await expect(
+        registry.connect(client).appendDisputeEvidence(1n, 0n, "ipfs://late"),
+      ).to.be.revertedWithCustomError(registry, "DisputeNotActive");
+    });
+
+    it("allows appendDisputeEvidence while protocol is paused", async function () {
+      const [admin, arb, client, freelancer] = await ethers.getSigners();
+      const registry = await deployRegistryWithArb(admin, arb);
+      const token = await deployAndAllowMock(registry, admin, admin);
+      const amount = 200n;
+      await token.connect(admin).mint(await client.getAddress(), amount * 10n);
+
+      await registry
+        .connect(client)
+        .createProject(await freelancer.getAddress(), await token.getAddress(), "", [
+          milestone(amount, 1n),
+        ]);
+      await token.connect(client).approve(await registry.getAddress(), amount);
+      await registry.connect(client).fundProject(1n, amount);
+      await registry.connect(freelancer).submitMilestone(1n, 0n, "ipfs://a");
+      await registry.connect(client).raiseDispute(1n, 0n, "ipfs://d");
+
+      await registry.connect(admin).pause();
+
+      const ev = "ipfs://evidence-while-paused";
+      await expect(registry.connect(freelancer).appendDisputeEvidence(1n, 0n, ev))
+        .to.emit(registry, "DisputeEvidenceAppended")
+        .withArgs(1n, 0n, await freelancer.getAddress(), ev);
     });
 
     it("resolves with ReleaseToFreelancer and pays the freelancer", async function () {
@@ -1028,6 +1161,41 @@ describe("EscrowFlowRegistry", function () {
       expect(p.refundedAmount).to.equal(0n);
       const ms = await registry.getMilestone(1n, 0n);
       expect(ms.status).to.equal(MS.Released);
+    });
+
+    it("emits effective payout recipients on dispute resolution", async function () {
+      const [admin, arb, client, freelancer, altFreelancer] =
+        await ethers.getSigners();
+      const registry = await deployRegistryWithArb(admin, arb);
+      const Blacklist = await ethers.getContractFactory("BlacklistStablecoin");
+      const token = await Blacklist.connect(admin).deploy(await admin.getAddress());
+      await token.waitForDeployment();
+      await registry
+        .connect(admin)
+        .setAllowedToken(await token.getAddress(), true);
+      const amount = 200n;
+      await token.connect(admin).mint(await client.getAddress(), amount * 2n);
+
+      await registry
+        .connect(client)
+        .createProject(await freelancer.getAddress(), await token.getAddress(), "", [
+          milestone(amount, 1n),
+        ]);
+      await token.connect(client).approve(await registry.getAddress(), amount);
+      await registry.connect(client).fundProject(1n, amount);
+      await registry.connect(freelancer).submitMilestone(1n, 0n, "ipfs://w");
+      await registry.connect(client).raiseDispute(1n, 0n, "ipfs://d");
+      await registry
+        .connect(arb)
+        .setAlternativeRecipient(1n, true, await altFreelancer.getAddress());
+
+      await expect(
+        registry
+          .connect(arb)
+          .resolveDispute(1n, 0n, Resolution.ReleaseToFreelancer, amount, 0n),
+      )
+        .to.emit(registry, "DisputePayoutRecipients")
+        .withArgs(1n, 0n, await altFreelancer.getAddress(), client.address);
     });
 
     it("resolves with RefundToClient and marks milestone Refunded", async function () {
@@ -1258,6 +1426,86 @@ describe("EscrowFlowRegistry", function () {
 
       const d = await registry.getDispute(1n, 0n);
       expect(d.active).to.equal(false);
+      expect(d.lastAppendedEvidenceURI).to.equal("");
+    });
+
+    it("allows client timeout fallback only for stale Pending (deadline) disputes", async function () {
+      const [admin, arb, client, freelancer] = await ethers.getSigners();
+      const registry = await deployRegistryWithArb(admin, arb);
+      const token = await deployAndAllowMock(registry, admin, admin);
+      const amount = 120n;
+      await token.connect(admin).mint(await client.getAddress(), amount * 10n);
+
+      await registry
+        .connect(client)
+        .createProject(await freelancer.getAddress(), await token.getAddress(), "", [
+          milestone(amount, 1n),
+        ]);
+      await token.connect(client).approve(await registry.getAddress(), amount);
+      await registry.connect(client).fundProject(1n, amount);
+      await registry.connect(client).raiseDispute(1n, 0n, "ipfs://d");
+
+      await expect(
+        registry.connect(client).resolveStaleDisputeByTimeout(1n, 0n),
+      ).to.be.revertedWithCustomError(registry, "DisputeTimeoutNotReached");
+
+      await ethers.provider.send("evm_increaseTime", [30 * 24 * 60 * 60 + 1]);
+      await ethers.provider.send("evm_mine", []);
+
+      await expect(registry.connect(client).resolveStaleDisputeByTimeout(1n, 0n))
+        .to.emit(registry, "DisputeResolved")
+        .withArgs(1n, 0n, await client.getAddress(), Resolution.RefundToClient, 0n, amount);
+    });
+
+    it("reverts stale timeout when dispute is on Submitted work", async function () {
+      const [admin, arb, client, freelancer] = await ethers.getSigners();
+      const registry = await deployRegistryWithArb(admin, arb);
+      const token = await deployAndAllowMock(registry, admin, admin);
+      const amount = 120n;
+      await token.connect(admin).mint(await client.getAddress(), amount * 10n);
+
+      await registry
+        .connect(client)
+        .createProject(await freelancer.getAddress(), await token.getAddress(), "", [
+          milestone(amount, 1n),
+        ]);
+      await token.connect(client).approve(await registry.getAddress(), amount);
+      await registry.connect(client).fundProject(1n, amount);
+      await registry.connect(freelancer).submitMilestone(1n, 0n, "ipfs://w");
+      await registry.connect(client).raiseDispute(1n, 0n, "ipfs://d");
+
+      await ethers.provider.send("evm_increaseTime", [30 * 24 * 60 * 60 + 1]);
+      await ethers.provider.send("evm_mine", []);
+
+      await expect(
+        registry.connect(client).resolveStaleDisputeByTimeout(1n, 0n),
+      ).to.be.revertedWithCustomError(registry, "StaleDisputeTimeoutOnlyForPendingMilestone");
+    });
+
+    it("reverts stale timeout when dispute is on Approved milestone", async function () {
+      const [admin, arb, client, freelancer] = await ethers.getSigners();
+      const registry = await deployRegistryWithArb(admin, arb);
+      const token = await deployAndAllowMock(registry, admin, admin);
+      const amount = 120n;
+      await token.connect(admin).mint(await client.getAddress(), amount * 10n);
+
+      await registry
+        .connect(client)
+        .createProject(await freelancer.getAddress(), await token.getAddress(), "", [
+          milestone(amount, 1n),
+        ]);
+      await token.connect(client).approve(await registry.getAddress(), amount);
+      await registry.connect(client).fundProject(1n, amount);
+      await registry.connect(freelancer).submitMilestone(1n, 0n, "ipfs://w");
+      await registry.connect(client).approveMilestone(1n, 0n);
+      await registry.connect(client).raiseDispute(1n, 0n, "ipfs://d");
+
+      await ethers.provider.send("evm_increaseTime", [30 * 24 * 60 * 60 + 1]);
+      await ethers.provider.send("evm_mine", []);
+
+      await expect(
+        registry.connect(client).resolveStaleDisputeByTimeout(1n, 0n),
+      ).to.be.revertedWithCustomError(registry, "StaleDisputeTimeoutOnlyForPendingMilestone");
     });
 
     it("still allows further funding while a milestone is disputed", async function () {
@@ -1358,6 +1606,22 @@ describe("EscrowFlowRegistry", function () {
           .grantRole(PAUSER_ROLE, await arb.getAddress()),
       ).to.be.revertedWithCustomError(registry, "RoleSeparationViolation");
     });
+
+    it("allows revokeRole on arbitrator and enforces invariant after renounceRole", async function () {
+      const [admin, arb, other] = await ethers.getSigners();
+      const registry = await deployRegistry(admin);
+      const ARBITRATOR_ROLE = await registry.ARBITRATOR_ROLE();
+      const PAUSER_ROLE = await registry.PAUSER_ROLE();
+      await registry.connect(admin).grantRole(ARBITRATOR_ROLE, await arb.getAddress());
+      await registry.connect(admin).revokeRole(ARBITRATOR_ROLE, await arb.getAddress());
+      expect(await registry.hasRole(ARBITRATOR_ROLE, await arb.getAddress())).to.equal(false);
+
+      await registry.connect(admin).grantRole(PAUSER_ROLE, await other.getAddress());
+      await registry.connect(admin).renounceRole(PAUSER_ROLE, await admin.getAddress());
+      expect(await registry.hasRole(PAUSER_ROLE, await admin.getAddress())).to.equal(false);
+      const defaultAdminRole = await registry.DEFAULT_ADMIN_ROLE();
+      expect(await registry.hasRole(defaultAdminRole, await admin.getAddress())).to.equal(true);
+    });
   });
 
   describe("admin hardening", function () {
@@ -1456,16 +1720,21 @@ describe("EscrowFlowRegistry", function () {
       await registry.connect(client).fundProject(1n, amount);
       await registry.connect(freelancer).submitMilestone(1n, 0n, "ipfs://work");
       await registry.connect(client).approveMilestone(1n, 0n);
+      await registry.connect(client).raiseDispute(1n, 0n, "ipfs://blacklist");
 
       await token.connect(admin).setBlacklisted(await freelancer.getAddress(), true);
       await expect(
-        registry.connect(client).releaseMilestone(1n, 0n),
+        registry
+          .connect(arb)
+          .resolveDispute(1n, 0n, Resolution.ReleaseToFreelancer, amount, 0n),
       ).to.be.revertedWith("BLACKLISTED_TO");
 
       await registry
         .connect(arb)
         .setAlternativeRecipient(1n, true, await altFreelancer.getAddress());
-      await registry.connect(client).releaseMilestone(1n, 0n);
+      await registry
+        .connect(arb)
+        .resolveDispute(1n, 0n, Resolution.ReleaseToFreelancer, amount, 0n);
       expect(await token.balanceOf(await altFreelancer.getAddress())).to.equal(amount);
     });
 
@@ -1507,6 +1776,29 @@ describe("EscrowFlowRegistry", function () {
         .connect(arb)
         .resolveDispute(1n, 0n, Resolution.RefundToClient, 0n, amount);
       expect(await token.balanceOf(await altClient.getAddress())).to.equal(amount);
+    });
+
+    it("reverts alternative recipient updates when no dispute is active", async function () {
+      const [admin, arb, client, freelancer, altFreelancer] =
+        await ethers.getSigners();
+      const registry = await deployRegistry(admin);
+      const ARBITRATOR_ROLE = await registry.ARBITRATOR_ROLE();
+      await registry.connect(admin).grantRole(ARBITRATOR_ROLE, await arb.getAddress());
+      const token = await deployAndAllowMock(registry, admin, admin);
+      const amount = 100n;
+      await token.connect(admin).mint(await client.getAddress(), amount * 2n);
+
+      await registry
+        .connect(client)
+        .createProject(await freelancer.getAddress(), await token.getAddress(), "", [
+          milestone(amount, 1n),
+        ]);
+
+      await expect(
+        registry
+          .connect(arb)
+          .setAlternativeRecipient(1n, true, await altFreelancer.getAddress()),
+      ).to.be.revertedWithCustomError(registry, "NoActiveDisputeForProject");
     });
   });
 

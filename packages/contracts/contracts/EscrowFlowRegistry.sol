@@ -13,7 +13,11 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
  * @notice Multi-project ERC20 milestone escrow: fund, submit, approve, release, and per-milestone disputes.
  * @dev Invariants: per-project `releasedAmount + refundedAmount <= fundedAmount`; milestone payouts never exceed
  *      `milestone.amount` for that index. Uses OpenZeppelin AccessControl, Pausable, ReentrancyGuard, SafeERC20.
- *      Assumes standard ERC20 (no fee-on-transfer); `token` must be a contract address at project creation.
+ *      {fundProject} requires the credited balance delta to equal `amount` ({InvalidFundingTransfer}), rejecting
+ *      fee-on-transfer or otherwise non-exact transfers. Other flows use SafeERC20; allowlisted tokens should be
+ *      standard ERC20s. `token` must be a contract address at project creation.
+ *      Off-chain or property-based tests should assert `_tokenOutstanding[token]` stays aligned with the sum of
+ *      per-project available liquidity for that token across all projects (see that mapping’s NatSpec).
  */
 contract EscrowFlowRegistry is AccessControl, ReentrancyGuard, Pausable {
     using SafeERC20 for IERC20;
@@ -37,6 +41,8 @@ contract EscrowFlowRegistry is AccessControl, ReentrancyGuard, Pausable {
 
     /// @notice Maximum UTF-8 byte length for URI strings (metadata, submissions, dispute reasons).
     uint256 public constant MAX_URI_BYTES = 2048;
+    /// @notice Client can force a stale **Pending-milestone** dispute refund after this timeout (see {resolveStaleDisputeByTimeout}).
+    uint256 public constant DISPUTE_TIMEOUT = 30 days;
 
     // -------------------------------------------------------------------------
     // Enums
@@ -49,6 +55,8 @@ contract EscrowFlowRegistry is AccessControl, ReentrancyGuard, Pausable {
         Cancelled
     }
 
+    /// @dev After {resolveDispute} with `Split`, status is set to `Released` even though payout is split; use
+    ///      {DisputeResolved} and {DisputePayoutRecipients} for economics, not status alone.
     enum MilestoneStatus {
         Pending,
         Submitted,
@@ -102,6 +110,8 @@ contract EscrowFlowRegistry is AccessControl, ReentrancyGuard, Pausable {
         address raisedBy;
         uint64 raisedAt;
         string reasonURI;
+        /// @dev Latest URI from {appendDisputeEvidence}; cleared when the dispute closes. Older URIs remain in logs only.
+        string lastAppendedEvidenceURI;
     }
 
     // -------------------------------------------------------------------------
@@ -116,6 +126,9 @@ contract EscrowFlowRegistry is AccessControl, ReentrancyGuard, Pausable {
 
     mapping(uint256 projectId => mapping(uint256 milestoneIndex => MilestoneDispute dispute)) private _disputes;
     mapping(address token => bool allowed) private _allowedTokens;
+    /// @dev Aggregate escrow liability per token for this contract. Must equal the sum over all projects of
+    ///      `(fundedAmount - releasedAmount - refundedAmount)` for projects whose `token` is this address.
+    ///      Maintained by fund, release, refund, cancel, and dispute paths; consumed by {sweepUntrackedToken}.
     mapping(address token => uint256 outstanding) private _tokenOutstanding;
     mapping(uint256 projectId => address recipient) private _alternativeFreelancerRecipient;
     mapping(uint256 projectId => address recipient) private _alternativeClientRecipient;
@@ -156,6 +169,7 @@ contract EscrowFlowRegistry is AccessControl, ReentrancyGuard, Pausable {
     );
 
     /// @notice Client-triggered payout after approval (non-dispute path).
+    /// @dev `freelancer` is always the transfer recipient; dispute-driven payouts use {DisputePayoutRecipients}.
     event MilestoneFundsReleased(
         uint256 indexed projectId,
         uint256 indexed milestoneIndex,
@@ -174,6 +188,14 @@ contract EscrowFlowRegistry is AccessControl, ReentrancyGuard, Pausable {
         string reasonURI
     );
 
+    /// @notice Extra dispute evidence while the dispute is open; latest URI is also returned by {getDispute}.
+    event DisputeEvidenceAppended(
+        uint256 indexed projectId,
+        uint256 indexed milestoneIndex,
+        address indexed submittedBy,
+        string evidenceURI
+    );
+
     event DisputeResolved(
         uint256 indexed projectId,
         uint256 indexed milestoneIndex,
@@ -181,6 +203,12 @@ contract EscrowFlowRegistry is AccessControl, ReentrancyGuard, Pausable {
         uint8 resolutionKind,
         uint256 freelancerAmount,
         uint256 clientAmount
+    );
+    event DisputePayoutRecipients(
+        uint256 indexed projectId,
+        uint256 indexed milestoneIndex,
+        address freelancerRecipient,
+        address clientRecipient
     );
     event AllowedTokenUpdated(address indexed token, bool allowed);
     event ProjectCancelled(
@@ -230,6 +258,10 @@ contract EscrowFlowRegistry is AccessControl, ReentrancyGuard, Pausable {
     error RoleSeparationViolation();
     error PendingDisputeMustRefundClient();
     error PreviousMilestoneNotCompleted();
+    error NoActiveDisputeForProject();
+    error DisputeTimeoutNotReached();
+    /// @dev Client timeout refund applies only when the dispute is on a `Pending` milestone (deadline passed).
+    error StaleDisputeTimeoutOnlyForPendingMilestone();
 
     // -------------------------------------------------------------------------
     // Constructor
@@ -237,7 +269,9 @@ contract EscrowFlowRegistry is AccessControl, ReentrancyGuard, Pausable {
 
     /**
      * @notice Deploy registry; `admin` receives `DEFAULT_ADMIN_ROLE` and `PAUSER_ROLE`.
-     * @dev Grant `ARBITRATOR_ROLE` separately via {grantRole}. Consider a multisig for `admin`.
+     * @dev Grant `ARBITRATOR_ROLE` separately via {grantRole}. Production deployments should use a multisig
+     *      (and often a timelock) for admin and a separate multisig for the arbitrator; this contract does not
+     *      enforce on-chain governance beyond {grantRole}/{revokeRole} separation rules.
      */
     constructor(address admin) {
         if (admin == address(0)) revert ZeroAddress();
@@ -252,6 +286,17 @@ contract EscrowFlowRegistry is AccessControl, ReentrancyGuard, Pausable {
     function grantRole(bytes32 role, address account) public override onlyRole(getRoleAdmin(role)) {
         _enforceRoleSeparationOnGrant(role, account);
         super.grantRole(role, account);
+        _assertRoleSeparationInvariant(account);
+    }
+
+    function revokeRole(bytes32 role, address account) public override onlyRole(getRoleAdmin(role)) {
+        super.revokeRole(role, account);
+        _assertRoleSeparationInvariant(account);
+    }
+
+    function renounceRole(bytes32 role, address callerConfirmation) public override {
+        super.renounceRole(role, callerConfirmation);
+        _assertRoleSeparationInvariant(callerConfirmation);
     }
 
     // -------------------------------------------------------------------------
@@ -269,6 +314,8 @@ contract EscrowFlowRegistry is AccessControl, ReentrancyGuard, Pausable {
     }
 
     /// @notice Allow or disallow an ERC-20 token for new project creation.
+    /// @dev Only vetted standard ERC20s should be allowlisted: rebasing, fee-on-transfer (rejected at fund), and
+    ///      weird `transfer` hooks can break accounting or grief users despite {fundProject} checks.
     function setAllowedToken(address token, bool allowed) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (token == address(0)) revert ZeroAddress();
         if (token.code.length == 0) revert InvalidToken();
@@ -284,7 +331,8 @@ contract EscrowFlowRegistry is AccessControl, ReentrancyGuard, Pausable {
         external
         onlyRole(ARBITRATOR_ROLE)
     {
-        _projectStorage(projectId);
+        Project storage project_ = _projectStorage(projectId);
+        if (!_projectHasAnyActiveDispute(projectId, project_)) revert NoActiveDisputeForProject();
         if (newRecipient == address(this)) revert InvalidRecipient();
         if (isFreelancer) {
             _alternativeFreelancerRecipient[projectId] = newRecipient;
@@ -344,7 +392,7 @@ contract EscrowFlowRegistry is AccessControl, ReentrancyGuard, Pausable {
         project_.status = ProjectStatus.Cancelled;
 
         if (refundable > 0) {
-            IERC20(project_.token).safeTransfer(_clientRecipient(projectId, project_), refundable);
+            IERC20(project_.token).safeTransfer(project_.client, refundable);
         }
 
         emit ProjectCancelled(projectId, msg.sender, project_.token, refundable);
@@ -445,16 +493,21 @@ contract EscrowFlowRegistry is AccessControl, ReentrancyGuard, Pausable {
     /**
      * @notice Freelancer submits deliverable reference.
      * @dev Requires `Pending` and available project liquidity >= this milestone amount.
-     *      Submission is allowed even with an active dispute so arbitrators can evaluate delivered work.
+     *      Reverts while a dispute is open on this milestone so a client {resolveStaleDisputeByTimeout} path cannot
+     *      be blocked by a post-dispute submission (Pending disputes are refund-only for the arbitrator anyway).
+     *      While disputed, parties may still append evidence via {appendDisputeEvidence}: each call emits
+     *      {DisputeEvidenceAppended} and updates `lastAppendedEvidenceURI` (returned by {getDispute}; older URIs are only in logs).
      */
     function submitMilestone(uint256 projectId, uint256 milestoneIndex, string calldata submissionURI)
         external
+        nonReentrant
         whenNotPaused
     {
         Project storage project_ = _projectStorage(projectId);
         if (project_.freelancer != msg.sender) revert NotProjectFreelancer();
         _requireProjectOperable(project_);
         _requireMilestoneIndex(project_, milestoneIndex);
+        if (_isDisputeActive(projectId, milestoneIndex)) revert DisputeActive();
         _requireUriLength(submissionURI);
 
         Milestone storage milestone_ = _milestones[projectId][milestoneIndex];
@@ -471,8 +524,9 @@ contract EscrowFlowRegistry is AccessControl, ReentrancyGuard, Pausable {
 
     /**
      * @notice Client marks submission as accepted (payout not sent until {releaseMilestone}).
+     * @dev `nonReentrant` for consistency with other milestone mutators even though this path does not transfer tokens.
      */
-    function approveMilestone(uint256 projectId, uint256 milestoneIndex) external whenNotPaused {
+    function approveMilestone(uint256 projectId, uint256 milestoneIndex) external nonReentrant whenNotPaused {
         Project storage project_ = _projectStorage(projectId);
         if (project_.client != msg.sender) revert NotProjectClient();
         _requireProjectOperable(project_);
@@ -512,7 +566,7 @@ contract EscrowFlowRegistry is AccessControl, ReentrancyGuard, Pausable {
         milestone_.status = MilestoneStatus.Released;
         _refreshProjectStatus(projectId, project_);
 
-        IERC20(project_.token).safeTransfer(_freelancerRecipient(projectId, project_), payout);
+        IERC20(project_.token).safeTransfer(project_.freelancer, payout);
 
         emit MilestoneFundsReleased(
             projectId, milestoneIndex, project_.freelancer, project_.token, payout, project_.releasedAmount
@@ -524,11 +578,34 @@ contract EscrowFlowRegistry is AccessControl, ReentrancyGuard, Pausable {
     // -------------------------------------------------------------------------
 
     /**
-     * @notice Open a dispute on a milestone in review (`Submitted` or `Approved`).
+     * @notice Append an additional evidence URI while a milestone dispute is open.
+     * @dev Updates `lastAppendedEvidenceURI` on the dispute (readable via {getDispute}); emits {DisputeEvidenceAppended}
+     *      for a full log trail. Callable when paused so parties can supplement a dispute while {resolveDispute} remains available.
+     *      `nonReentrant` for consistency with other mutators (no token transfers today).
+     */
+    function appendDisputeEvidence(uint256 projectId, uint256 milestoneIndex, string calldata evidenceURI)
+        external
+        nonReentrant
+    {
+        Project storage project_ = _projectStorage(projectId);
+        if (msg.sender != project_.client && msg.sender != project_.freelancer) revert NotAuthorizedToRaiseDispute();
+        _requireMilestoneIndex(project_, milestoneIndex);
+        _requireUriLength(evidenceURI);
+        MilestoneDispute storage dispute_ = _disputes[projectId][milestoneIndex];
+        if (!dispute_.active) revert DisputeNotActive();
+        dispute_.lastAppendedEvidenceURI = evidenceURI;
+        emit DisputeEvidenceAppended(projectId, milestoneIndex, msg.sender, evidenceURI);
+    }
+
+    /**
+     * @notice Open a dispute on a milestone: `Pending` after its deadline, or in review (`Submitted` / `Approved`).
      * @param reasonURI Evidence pointer; bounded by {MAX_URI_BYTES}.
+     * @dev Requires `_availableLiquidity >= milestone.amount` for every open dispute (defensive for all statuses).
+     *      `nonReentrant` for consistency with other state-changing entrypoints.
      */
     function raiseDispute(uint256 projectId, uint256 milestoneIndex, string calldata reasonURI)
         external
+        nonReentrant
         whenNotPaused
     {
         Project storage project_ = _projectStorage(projectId);
@@ -543,12 +620,13 @@ contract EscrowFlowRegistry is AccessControl, ReentrancyGuard, Pausable {
         Milestone storage milestone_ = _milestones[projectId][milestoneIndex];
         if (milestone_.status == MilestoneStatus.Pending) {
             if (block.timestamp <= milestone_.deadline) revert MilestoneDeadlineNotReached();
-            if (_availableLiquidity(project_) < milestone_.amount) revert InsufficientFundingForMilestone();
         } else if (milestone_.status == MilestoneStatus.Approved) {
             if (msg.sender != project_.client) revert NotAuthorizedToRaiseDispute();
-        } else if (milestone_.status != MilestoneStatus.Submitted && milestone_.status != MilestoneStatus.Approved) {
+        } else if (milestone_.status != MilestoneStatus.Submitted) {
             revert InvalidDisputeMilestoneStatus();
         }
+
+        if (_availableLiquidity(project_) < milestone_.amount) revert InsufficientFundingForMilestone();
 
         dispute_.active = true;
         dispute_.raisedBy = msg.sender;
@@ -564,7 +642,8 @@ contract EscrowFlowRegistry is AccessControl, ReentrancyGuard, Pausable {
 
     /**
      * @notice Arbitrator settles dispute: full release, full refund, or split summing to `milestone.amount`.
-     * @dev Runs when paused so stuck escrow can be unwound; not subject to `whenNotPaused`.
+     * @dev For `Split`, milestone status is still set to `Released` (see {MilestoneStatus}). Runs when paused so stuck
+     *      escrow can be unwound; not subject to `whenNotPaused`.
      */
     function resolveDispute(
         uint256 projectId,
@@ -581,7 +660,6 @@ contract EscrowFlowRegistry is AccessControl, ReentrancyGuard, Pausable {
         if (!dispute_.active) revert DisputeNotActive();
 
         Milestone storage milestone_ = _milestones[projectId][milestoneIndex];
-        uint256 milestoneAmount = milestone_.amount;
         if (milestone_.status == MilestoneStatus.Pending) {
             if (_availableLiquidity(project_) < milestone_.amount) {
                 revert InsufficientFundingForMilestone();
@@ -589,11 +667,10 @@ contract EscrowFlowRegistry is AccessControl, ReentrancyGuard, Pausable {
             if (kind != DisputeResolutionKind.RefundToClient) revert PendingDisputeMustRefundClient();
         }
 
-        _validateResolutionAmounts(kind, milestoneAmount, freelancerAmount, clientAmount);
+        _validateResolutionAmounts(kind, milestone_.amount, freelancerAmount, clientAmount);
 
         uint256 totalOut = freelancerAmount + clientAmount;
-        uint256 liquidity = _availableLiquidity(project_);
-        if (totalOut > liquidity) revert InsufficientEscrowLiquidity();
+        if (totalOut > _availableLiquidity(project_)) revert InsufficientEscrowLiquidity();
 
         _clearDispute(dispute_);
         project_.activeDisputeCount -= 1;
@@ -609,17 +686,53 @@ contract EscrowFlowRegistry is AccessControl, ReentrancyGuard, Pausable {
         }
         _refreshProjectStatus(projectId, project_);
 
-        IERC20 token_ = IERC20(project_.token);
-        if (freelancerAmount > 0) {
-            token_.safeTransfer(_freelancerRecipient(projectId, project_), freelancerAmount);
-        }
-        if (clientAmount > 0) {
-            token_.safeTransfer(_clientRecipient(projectId, project_), clientAmount);
-        }
-
-        emit DisputeResolved(
-            projectId, milestoneIndex, msg.sender, uint8(kind), freelancerAmount, clientAmount
+        _payoutAndEmitDisputeResolution(
+            projectId,
+            milestoneIndex,
+            kind,
+            freelancerAmount,
+            clientAmount,
+            project_
         );
+        _clearAlternativeRecipients(projectId);
+    }
+
+    /**
+     * @notice Client fallback to resolve stale **deadline** disputes by refund after timeout.
+     * @dev Only milestones still in `Pending` at resolution time qualify: disputes on `Submitted` / `Approved`
+     *      work must be settled by an arbitrator (timeout does not auto-refund the client).
+     *      Runs when paused so funds are recoverable even in emergency mode.
+     */
+    function resolveStaleDisputeByTimeout(uint256 projectId, uint256 milestoneIndex) external nonReentrant {
+        Project storage project_ = _projectStorage(projectId);
+        _requireProjectOperable(project_);
+        if (project_.client != msg.sender) revert NotProjectClient();
+        _requireMilestoneIndex(project_, milestoneIndex);
+
+        MilestoneDispute storage dispute_ = _disputes[projectId][milestoneIndex];
+        if (!dispute_.active) revert DisputeNotActive();
+        if (block.timestamp < uint256(dispute_.raisedAt) + DISPUTE_TIMEOUT) revert DisputeTimeoutNotReached();
+
+        Milestone storage milestone_ = _milestones[projectId][milestoneIndex];
+        if (milestone_.status != MilestoneStatus.Pending) revert StaleDisputeTimeoutOnlyForPendingMilestone();
+        uint256 amount = milestone_.amount;
+        uint256 liquidity = _availableLiquidity(project_);
+        if (amount > liquidity) revert InsufficientEscrowLiquidity();
+
+        _clearDispute(dispute_);
+        project_.activeDisputeCount -= 1;
+        project_.refundedAmount += amount;
+        _tokenOutstanding[project_.token] -= amount;
+        milestone_.status = MilestoneStatus.Refunded;
+        _refreshProjectStatus(projectId, project_);
+
+        address clientRecipient = _clientRecipient(projectId, project_);
+        IERC20(project_.token).safeTransfer(clientRecipient, amount);
+        emit DisputeResolved(
+            projectId, milestoneIndex, msg.sender, uint8(DisputeResolutionKind.RefundToClient), 0, amount
+        );
+        emit DisputePayoutRecipients(projectId, milestoneIndex, address(0), clientRecipient);
+        _clearAlternativeRecipients(projectId);
     }
 
     // -------------------------------------------------------------------------
@@ -645,12 +758,24 @@ contract EscrowFlowRegistry is AccessControl, ReentrancyGuard, Pausable {
     function getDispute(uint256 projectId, uint256 milestoneIndex)
         external
         view
-        returns (bool active, address raisedBy, uint64 raisedAt, string memory reasonURI)
+        returns (
+            bool active,
+            address raisedBy,
+            uint64 raisedAt,
+            string memory reasonURI,
+            string memory lastAppendedEvidenceURI
+        )
     {
         Project storage project_ = _projectStorage(projectId);
         _requireMilestoneIndex(project_, milestoneIndex);
         MilestoneDispute storage dispute_ = _disputes[projectId][milestoneIndex];
-        return (dispute_.active, dispute_.raisedBy, dispute_.raisedAt, dispute_.reasonURI);
+        return (
+            dispute_.active,
+            dispute_.raisedBy,
+            dispute_.raisedAt,
+            dispute_.reasonURI,
+            dispute_.lastAppendedEvidenceURI
+        );
     }
 
     function isAllowedToken(address token) external view returns (bool) {
@@ -694,6 +819,13 @@ contract EscrowFlowRegistry is AccessControl, ReentrancyGuard, Pausable {
         }
     }
 
+    /// @dev Post-condition after any role grant/revoke/renounce affecting `account`.
+    function _assertRoleSeparationInvariant(address account) private view {
+        if (hasRole(ARBITRATOR_ROLE, account) && (hasRole(DEFAULT_ADMIN_ROLE, account) || hasRole(PAUSER_ROLE, account))) {
+            revert RoleSeparationViolation();
+        }
+    }
+
     function _requireUriLength(string calldata uri) private pure {
         if (bytes(uri).length > MAX_URI_BYTES) revert URITooLong();
     }
@@ -728,6 +860,35 @@ contract EscrowFlowRegistry is AccessControl, ReentrancyGuard, Pausable {
         return alt == address(0) ? project_.client : alt;
     }
 
+    function _clearAlternativeRecipients(uint256 projectId) private {
+        _alternativeFreelancerRecipient[projectId] = address(0);
+        _alternativeClientRecipient[projectId] = address(0);
+    }
+
+    function _payoutAndEmitDisputeResolution(
+        uint256 projectId,
+        uint256 milestoneIndex,
+        DisputeResolutionKind kind,
+        uint256 freelancerAmount,
+        uint256 clientAmount,
+        Project storage project_
+    ) private {
+        address freelancerRecipient = _freelancerRecipient(projectId, project_);
+        address clientRecipient = _clientRecipient(projectId, project_);
+        IERC20 token_ = IERC20(project_.token);
+        if (freelancerAmount > 0) {
+            token_.safeTransfer(freelancerRecipient, freelancerAmount);
+        }
+        if (clientAmount > 0) {
+            token_.safeTransfer(clientRecipient, clientAmount);
+        }
+
+        emit DisputeResolved(
+            projectId, milestoneIndex, msg.sender, uint8(kind), freelancerAmount, clientAmount
+        );
+        emit DisputePayoutRecipients(projectId, milestoneIndex, freelancerRecipient, clientRecipient);
+    }
+
     function _projectHasAnyActiveDispute(uint256, Project storage project_) private view returns (bool) {
         return project_.activeDisputeCount > 0;
     }
@@ -754,6 +915,7 @@ contract EscrowFlowRegistry is AccessControl, ReentrancyGuard, Pausable {
         dispute_.raisedBy = address(0);
         dispute_.raisedAt = 0;
         dispute_.reasonURI = "";
+        dispute_.lastAppendedEvidenceURI = "";
     }
 
     function _validateResolutionAmounts(
