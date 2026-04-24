@@ -12,6 +12,10 @@ export function getExplorerTxUrl(chainId: number | null | undefined, txHash: str
           ? "https://basescan.org"
           : chainId === 84532
             ? "https://sepolia.basescan.org"
+            : chainId === 42161
+              ? "https://arbiscan.io"
+              : chainId === 421614
+                ? "https://sepolia.arbiscan.io"
             : null;
   if (!base) {
     return null;

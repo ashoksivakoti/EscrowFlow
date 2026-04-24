@@ -13,18 +13,19 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
 import { WagmiProvider } from "wagmi";
 import type { Chain } from "wagmi/chains";
-import { baseSepolia, hardhat, mainnet, sepolia } from "wagmi/chains";
+import { arbitrumSepolia, baseSepolia, hardhat, mainnet, sepolia } from "wagmi/chains";
 
 const CHAIN_MAP: Record<number, Chain> = {
   1: mainnet,
   11155111: sepolia,
   84532: baseSepolia,
+  421614: arbitrumSepolia,
   31337: hardhat,
   1337: hardhat,
 };
 
 function resolveChains(): [Chain, ...Chain[]] {
-  const raw = process.env.NEXT_PUBLIC_CHAIN_IDS ?? "84532,31337";
+  const raw = process.env.NEXT_PUBLIC_CHAIN_IDS ?? "421614,31337";
   const ids = raw
     .split(",")
     .map((s) => Number.parseInt(s.trim(), 10))

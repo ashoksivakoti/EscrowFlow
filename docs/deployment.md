@@ -6,7 +6,7 @@ This guide keeps deployment portfolio-friendly while still realistic for product
 
 - **Web app**: Next.js (`apps/web`) deployed as a Node runtime (`output: "standalone"`).
 - **Database**: PostgreSQL + Prisma migrations.
-- **Contracts**: deploy from `packages/contracts` to testnet (`sepolia` or `baseSepolia`).
+- **Contracts**: deploy from `packages/contracts` to testnet (`arbitrumSepolia`).
 - **Event sync**: cron/scheduler triggers `/api/internal/event-sync` (token protected).
 - **IPFS**: Pinata-backed server uploads with constrained MIME/size policy.
 
@@ -58,7 +58,7 @@ From root:
 
 ```bash
 pnpm contracts:test
-pnpm contracts:deploy:stack -- --network baseSepolia
+pnpm contracts:deploy:stack -- --network arbitrumSepolia
 ```
 
 Artifact is written to:

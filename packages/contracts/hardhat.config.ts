@@ -35,6 +35,11 @@ const config: HardhatUserConfig = {
       chainId: 84532,
       accounts: deployerPrivateKeys(),
     },
+    arbitrumSepolia: {
+      url: process.env.ARBITRUM_SEPOLIA_RPC_URL || "",
+      chainId: 421614,
+      accounts: deployerPrivateKeys(),
+    },
   },
   paths: {
     sources: "./contracts",

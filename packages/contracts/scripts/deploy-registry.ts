@@ -17,7 +17,7 @@ import {
  *
  * Usage:
  *   pnpm exec hardhat run scripts/deploy-registry.ts --network localhost
- *   pnpm exec hardhat run scripts/deploy-registry.ts --network sepolia
+ *   pnpm exec hardhat run scripts/deploy-registry.ts --network arbitrumSepolia
  */
 async function main() {
   const [deployer] = await ethers.getSigners();
