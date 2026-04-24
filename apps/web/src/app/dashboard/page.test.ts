@@ -143,6 +143,15 @@ describe("DashboardPage summaries", () => {
     ).not.toBeInTheDocument();
     expect(await screen.findByText("Active contracts")).toBeInTheDocument();
     expect(screen.getByText("Pending submissions")).toBeInTheDocument();
-    expect(screen.getByText("Released earnings")).toBeInTheDocument();
+    expect(screen.getAllByText("Released earnings").length).toBeGreaterThan(0);
+  });
+
+  it("renders admin content in shared dashboard layout", async () => {
+    dashboardPageTest.setRoles(["ADMIN"]);
+    renderWithQueryClient(createElement(DashboardPage));
+
+    expect(await screen.findByText("Admin operations")).toBeInTheDocument();
+    expect(screen.getByText("Dispute lane")).toBeInTheDocument();
+    expect(screen.getByText("Review active disputes")).toBeInTheDocument();
   });
 });

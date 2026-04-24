@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { Bell } from "lucide-react";
 
 import { useNotificationsQuery } from "@/hooks/use-notifications-query";
 import { useSessionQuery } from "@/hooks/use-session-query";
@@ -46,7 +47,11 @@ export function NotificationBell() {
         aria-label="Open notifications"
         aria-expanded={open}
       >
-        <span aria-hidden>🔔</span>
+        <Bell
+          aria-hidden="true"
+          className="h-5 w-5 text-current drop-shadow-[0_1px_2px_rgba(0,0,0,0.45)]"
+          strokeWidth={1.9}
+        />
       </button>
       {unreadCount > 0 ? (
         <span className="absolute -right-1 -top-1 inline-flex min-w-[1.1rem] items-center justify-center rounded-full border border-cyan-200/40 bg-cyan-400 px-1 text-[10px] font-semibold text-zinc-950">

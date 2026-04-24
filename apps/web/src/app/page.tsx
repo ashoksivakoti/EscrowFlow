@@ -1,8 +1,7 @@
-import Link from "next/link";
 import type { ReactNode } from "react";
+import Link from "next/link";
 
-import { BrandMark } from "@escrowflow/ui";
-
+import { LandingNavbar } from "@/components/layout/landing-navbar";
 import { buttonClassName } from "@/components/ui/button";
 import { cardSurfaceClassName } from "@/components/ui/card";
 import { cn } from "@/lib/cn";
@@ -13,6 +12,10 @@ export default function HomePage() {
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-0 bg-[radial-gradient(90%_55%_at_50%_0%,rgba(34,211,238,0.16)_0%,rgba(2,6,23,0)_65%)]"
+      />
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 opacity-40 [background-image:linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] [background-size:64px_64px] [mask-image:radial-gradient(circle_at_center,black,transparent_82%)]"
       />
       <div
         aria-hidden="true"
@@ -27,63 +30,21 @@ export default function HomePage() {
         className="pointer-events-none absolute -right-24 top-48 h-72 w-72 rounded-full bg-cyan-500/12 blur-[120px]"
       />
 
-      <section className="relative z-10 mx-auto flex w-full max-w-6xl flex-col gap-12 px-4 py-8 sm:gap-16 sm:px-6 sm:py-12 lg:px-8 lg:py-16">
-        <header className="flex flex-col gap-6 lg:gap-8">
-          <div className="flex items-center gap-4">
-            <BrandMark />
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-cyan-300">
-              EscrowFlow
-            </p>
-          </div>
+      <LandingNavbar />
 
+      <section className="relative z-10 mx-auto flex w-full max-w-6xl flex-col gap-12 px-4 py-8 sm:gap-16 sm:px-6 sm:py-12 lg:px-8 lg:py-16">
+        <header className="space-y-7 text-center lg:space-y-8 lg:text-left">
           <div className="max-w-4xl space-y-5">
             <h1 className="text-balance text-[1.95rem] font-semibold tracking-[-0.02em] text-white sm:text-5xl lg:text-[3.65rem] lg:leading-[1.03]">
               Milestone escrow for Web3 teams that want trust, speed, and certainty.
             </h1>
-            <p className="max-w-3xl text-pretty text-sm leading-relaxed text-zinc-300 sm:text-base lg:text-[1.08rem] lg:leading-relaxed">
+            <p className="mx-auto max-w-3xl text-pretty text-sm leading-relaxed text-zinc-300 sm:text-base lg:mx-0 lg:text-[1.08rem] lg:leading-relaxed">
               Fund once, release by milestone, and keep every delivery verifiable with on-chain
               payments plus IPFS-backed work artifacts. Built for premium freelancer and client
               workflows.
             </p>
           </div>
 
-          <div className="flex w-full max-w-full flex-col gap-3 sm:flex-row sm:flex-wrap">
-            <Link
-              href="/login"
-              className={buttonClassName({
-                variant: "primary",
-                size: "lg",
-                className: "w-full sm:w-auto",
-              })}
-            >
-              Sign in with wallet
-            </Link>
-            <Link
-              href="/dashboard"
-              className={buttonClassName({
-                variant: "secondary",
-                size: "lg",
-                className: "w-full sm:w-auto",
-              })}
-            >
-              Explore dashboard
-            </Link>
-          </div>
-
-          <div className="grid grid-cols-1 gap-2.5 text-xs text-zinc-400 sm:grid-cols-3 sm:gap-3">
-            {[
-              "Wallet-native SIWE authentication",
-              "IPFS-backed milestone evidence",
-              "Escrow-first release controls",
-            ].map((item) => (
-              <div
-                key={item}
-                className="rounded-lg border border-zinc-800/85 bg-zinc-900/50 px-3 py-2.5 text-center sm:text-left"
-              >
-                {item}
-              </div>
-            ))}
-          </div>
         </header>
 
         <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">

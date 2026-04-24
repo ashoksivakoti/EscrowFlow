@@ -99,6 +99,7 @@ export default function ProjectsPage() {
       subtitle="Search and manage escrow projects with role-aware filters and sorting."
       className="overflow-x-hidden"
       containerClassName="max-w-6xl sm:max-w-6xl"
+      iconBrandOnly
     >
       {loading || !me ? (
         <ProjectsSkeleton />
@@ -307,7 +308,15 @@ function ProjectsSkeleton() {
   return (
     <div className="space-y-4">
       <Card>
-        <div className="h-24 animate-pulse rounded-xl bg-zinc-100 dark:bg-zinc-900" />
+        <div className="space-y-3 rounded-xl border border-zinc-800/90 bg-zinc-950/40 p-4 sm:p-5">
+          <div className="h-3 w-32 animate-pulse rounded bg-zinc-800" />
+          <div className="h-10 w-full animate-pulse rounded-xl bg-zinc-900/80" />
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            {Array.from({ length: 4 }).map((_, idx) => (
+              <div key={idx} className="h-10 animate-pulse rounded-xl bg-zinc-900/80" />
+            ))}
+          </div>
+        </div>
       </Card>
       <ProjectsListSkeleton />
     </div>
@@ -319,7 +328,27 @@ function ProjectsListSkeleton() {
     <div className="space-y-3">
       {Array.from({ length: 6 }).map((_, index) => (
         <Card key={index} className="p-4 sm:p-5">
-          <div className="h-24 animate-pulse rounded-xl bg-zinc-100 dark:bg-zinc-900" />
+          <div className="space-y-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0 space-y-2">
+                <div className="h-5 w-48 max-w-full animate-pulse rounded bg-zinc-800" />
+                <div className="h-3 w-64 max-w-full animate-pulse rounded bg-zinc-900/80" />
+              </div>
+              <div className="h-9 w-full animate-pulse rounded-xl bg-zinc-900/80 sm:w-28" />
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              {Array.from({ length: 4 }).map((_, infoIdx) => (
+                <div
+                  key={infoIdx}
+                  className="h-14 animate-pulse rounded-xl border border-zinc-800/90 bg-zinc-950/50"
+                />
+              ))}
+            </div>
+            <div className="space-y-2">
+              <div className="h-3 w-28 animate-pulse rounded bg-zinc-800/90" />
+              <div className="h-2 animate-pulse rounded-full bg-zinc-800/90" />
+            </div>
+          </div>
         </Card>
       ))}
     </div>

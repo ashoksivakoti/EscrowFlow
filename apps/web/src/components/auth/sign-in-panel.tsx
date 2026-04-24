@@ -133,26 +133,8 @@ export function SignInPanel() {
     phase === "verifying" ||
     isSigning;
 
-  const phaseLabel =
-    phase === "nonce" || phase === "verifying"
-      ? "Verifying secure challenge"
-      : phase === "signing" || isSigning
-        ? "Awaiting wallet signature"
-        : phase === "success"
-          ? "Signed in"
-          : "Ready";
-
   return (
-    <div className="flex w-full max-w-full flex-col gap-5 px-4 pb-5 sm:px-6 sm:pb-6">
-      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-zinc-800/90 bg-zinc-900/55 px-3 py-2.5">
-        <span className="text-xs font-medium uppercase tracking-[0.14em] text-cyan-200/90">
-          Wallet auth
-        </span>
-        <span className="max-w-full truncate rounded-full border border-zinc-700/90 bg-zinc-900 px-2.5 py-1 text-[11px] font-medium text-zinc-300">
-          {phaseLabel}
-        </span>
-      </div>
-
+    <div className="flex w-full max-w-full flex-col gap-5 p-4 sm:p-6">
       <div className="flex min-h-12 w-full max-w-full flex-col gap-3 rounded-xl border border-zinc-800/90 bg-zinc-950/75 p-3 transition-colors hover:border-zinc-700 sm:flex-row sm:items-center sm:justify-between">
         <span className="text-sm font-medium text-zinc-300">Wallet</span>
         <div className="w-full min-w-0 sm:w-auto sm:max-w-[290px] [&_button]:min-h-12 [&_button]:w-full [&_button]:max-w-full [&_button]:rounded-xl [&_button]:border-zinc-700/80 [&_button]:bg-zinc-900/90 [&_button]:text-zinc-100 [&_button]:hover:border-cyan-300/40 [&_button]:hover:bg-zinc-900">

@@ -8,7 +8,6 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { AuthShell } from "@/components/layout/auth-shell";
 import { Button, buttonClassName } from "@/components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Spinner } from "@/components/ui/spinner";
 import { needsOnboarding } from "@/lib/auth/client-guards";
 import {
   ApiRequestError,
@@ -106,11 +105,10 @@ export default function ProjectApplicationsPage() {
       subtitle="Review freelancers who applied to this marketplace posting."
       className="overflow-x-hidden"
       containerClassName="max-w-4xl sm:max-w-4xl"
+      iconBrandOnly
     >
       {loading || !me ? (
-        <div className="flex flex-col items-center justify-center gap-4 py-20">
-          <Spinner />
-        </div>
+        <ProjectApplicationsSkeleton />
       ) : !me.roles.includes("CLIENT") ? (
         <Card>
           <CardHeader>
@@ -119,9 +117,7 @@ export default function ProjectApplicationsPage() {
           </CardHeader>
         </Card>
       ) : isPending ? (
-        <div className="flex justify-center py-16">
-          <Spinner />
-        </div>
+        <ProjectApplicationsSkeleton />
       ) : (
         <div className="flex w-full max-w-full flex-col gap-4">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -205,5 +201,30 @@ export default function ProjectApplicationsPage() {
         </div>
       )}
     </AuthShell>
+  );
+}
+
+function ProjectApplicationsSkeleton() {
+  return (
+    <div className="flex w-full max-w-full flex-col gap-4">
+      <div className="h-10 w-full animate-pulse rounded-xl bg-zinc-900/80 sm:w-36" />
+      {Array.from({ length: 3 }).map((_, idx) => (
+        <Card key={idx} className="w-full max-w-full overflow-hidden">
+          <div className="space-y-2 p-4 sm:p-6">
+            <div className="h-5 w-40 animate-pulse rounded bg-zinc-800" />
+            <div className="h-3 w-64 max-w-full animate-pulse rounded bg-zinc-900/80" />
+          </div>
+          <div className="space-y-2 border-t border-zinc-800/90 px-4 py-3 sm:px-6">
+            <div className="h-5 w-20 animate-pulse rounded-full bg-zinc-800/90" />
+            <div className="h-3 w-full animate-pulse rounded bg-zinc-900/80" />
+            <div className="h-3 w-4/5 animate-pulse rounded bg-zinc-900/80" />
+          </div>
+          <div className="flex flex-col gap-2 border-t border-zinc-800/90 px-4 py-3 sm:flex-row sm:justify-end sm:px-6">
+            <div className="h-9 w-full animate-pulse rounded-xl bg-zinc-900/80 sm:w-24" />
+            <div className="h-9 w-full animate-pulse rounded-xl bg-zinc-900/80 sm:w-24" />
+          </div>
+        </Card>
+      ))}
+    </div>
   );
 }

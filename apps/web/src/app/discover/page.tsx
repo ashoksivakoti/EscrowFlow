@@ -9,7 +9,6 @@ import { buttonClassName } from "@/components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Spinner } from "@/components/ui/spinner";
 import { needsOnboarding } from "@/lib/auth/client-guards";
 import { useMeQuery } from "@/hooks/use-me-query";
 import { usePublicProjectsQuery } from "@/hooks/use-public-projects-query";
@@ -75,11 +74,10 @@ export default function DiscoverProjectsPage() {
       subtitle="Browse public OPEN roles. Apply before the client assigns someone."
       className="overflow-x-hidden"
       containerClassName="max-w-5xl sm:max-w-5xl"
+      iconBrandOnly
     >
       {loading || !me ? (
-        <div className="flex flex-col items-center justify-center gap-4 py-20">
-          <Spinner />
-        </div>
+        <DiscoverPageSkeleton />
       ) : (
         <div className="flex w-full max-w-full flex-col gap-5">
           <Card className="w-full max-w-full overflow-hidden">
@@ -101,9 +99,7 @@ export default function DiscoverProjectsPage() {
           </Card>
 
           {listLoading ? (
-            <div className="flex justify-center py-12">
-              <Spinner />
-            </div>
+            <DiscoverListSkeleton />
           ) : items.length === 0 ? (
             <Card className="w-full max-w-full">
               <CardHeader>
@@ -144,5 +140,42 @@ export default function DiscoverProjectsPage() {
         </div>
       )}
     </AuthShell>
+  );
+}
+
+function DiscoverPageSkeleton() {
+  return (
+    <div className="flex w-full max-w-full flex-col gap-5">
+      <Card className="w-full max-w-full overflow-hidden">
+        <div className="space-y-3 p-4 sm:p-6">
+          <div className="h-5 w-40 animate-pulse rounded bg-zinc-800" />
+          <div className="h-3 w-64 animate-pulse rounded bg-zinc-900/80" />
+        </div>
+        <div className="border-t border-zinc-800/90 px-4 py-4 sm:px-6 sm:py-5">
+          <div className="h-12 animate-pulse rounded-xl bg-zinc-900/80" />
+        </div>
+      </Card>
+      <DiscoverListSkeleton />
+    </div>
+  );
+}
+
+function DiscoverListSkeleton() {
+  return (
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {Array.from({ length: 6 }).map((_, idx) => (
+        <Card key={idx} className="overflow-hidden">
+          <div className="space-y-2 p-4 sm:p-6">
+            <div className="h-5 w-40 animate-pulse rounded bg-zinc-800" />
+            <div className="h-3 w-full animate-pulse rounded bg-zinc-900/80" />
+            <div className="h-3 w-5/6 animate-pulse rounded bg-zinc-900/80" />
+          </div>
+          <div className="flex flex-col gap-2 border-t border-zinc-800/90 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+            <div className="h-3 w-24 animate-pulse rounded bg-zinc-800/90" />
+            <div className="h-9 w-full animate-pulse rounded-xl bg-zinc-900/80 sm:w-28" />
+          </div>
+        </Card>
+      ))}
+    </div>
   );
 }

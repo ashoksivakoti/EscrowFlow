@@ -48,6 +48,7 @@ export default function CreateProjectPage() {
       title="Create project"
       subtitle="Define milestones, link optional on-chain context, and invite the freelancer wallet."
       className="overflow-x-hidden"
+      iconBrandOnly
     >
       {loading || !me ? (
         <div className="flex flex-col items-center justify-center gap-4 py-20">

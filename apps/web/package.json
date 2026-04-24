@@ -22,6 +22,7 @@
     "clsx": "^2.1.1",
     "fake-indexeddb": "^6.0.0",
     "jose": "^6.2.2",
+    "lucide-react": "^1.9.0",
     "next": "^15.2.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

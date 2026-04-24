@@ -47,6 +47,7 @@ export default function LoginPage() {
       title="Sign in"
       subtitle="Connect your wallet and sign a one-time message. No gas transaction is sent."
       containerClassName="max-w-xl"
+      iconBrandOnly
     >
       <Card className="w-full max-w-full border-cyan-300/20 shadow-[0_24px_60px_-30px_rgba(34,211,238,0.35)]">
         {showSpinner ? (

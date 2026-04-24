@@ -14,7 +14,6 @@ import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/ca
 import { FieldError } from "@/components/ui/field-error";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { needsOnboarding } from "@/lib/auth/client-guards";
 import {
@@ -134,11 +133,10 @@ export default function DiscoverProjectDetailPage() {
       subtitle="Review scope and submit a single application for this listing."
       className="overflow-x-hidden"
       containerClassName="max-w-3xl sm:max-w-3xl"
+      iconBrandOnly
     >
       {loading ? (
-        <div className="flex flex-col items-center justify-center gap-4 py-20">
-          <Spinner />
-        </div>
+        <DiscoverProjectDetailSkeleton />
       ) : error || !data ? (
         <Card>
           <CardHeader>
@@ -234,5 +232,33 @@ export default function DiscoverProjectDetailPage() {
         </div>
       )}
     </AuthShell>
+  );
+}
+
+function DiscoverProjectDetailSkeleton() {
+  return (
+    <div className="flex w-full max-w-full flex-col gap-5">
+      <Card className="w-full max-w-full overflow-hidden">
+        <div className="space-y-3 p-4 sm:p-6">
+          <div className="h-8 w-3/4 animate-pulse rounded bg-zinc-800" />
+          <div className="h-4 w-full animate-pulse rounded bg-zinc-900/80" />
+          <div className="h-4 w-5/6 animate-pulse rounded bg-zinc-900/80" />
+        </div>
+        <div className="space-y-2 border-t border-zinc-800/90 px-4 py-4 sm:px-6">
+          <div className="h-3 w-1/3 animate-pulse rounded bg-zinc-800/90" />
+          <div className="h-3 w-2/3 animate-pulse rounded bg-zinc-900/80" />
+          <div className="h-3 w-1/4 animate-pulse rounded bg-zinc-800/90" />
+        </div>
+      </Card>
+      <Card className="w-full max-w-full overflow-hidden">
+        <div className="space-y-3 p-4 sm:p-6">
+          <div className="h-5 w-40 animate-pulse rounded bg-zinc-800" />
+          <div className="h-24 animate-pulse rounded-xl bg-zinc-900/80" />
+          <div className="h-12 animate-pulse rounded-xl bg-zinc-900/80" />
+          <div className="h-24 animate-pulse rounded-xl bg-zinc-900/80" />
+          <div className="h-10 w-full animate-pulse rounded-xl bg-zinc-900/80 sm:w-44" />
+        </div>
+      </Card>
+    </div>
   );
 }

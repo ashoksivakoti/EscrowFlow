@@ -31,6 +31,7 @@ export default function OnboardingPage() {
       title="Welcome aboard"
       subtitle="Finish your profile to unlock project creation, milestone workflows, and payouts."
       containerClassName="max-w-2xl sm:max-w-2xl"
+      iconBrandOnly
     >
       {isPending || !isFetched ? (
         <div className="flex flex-col items-center justify-center gap-4 py-20">

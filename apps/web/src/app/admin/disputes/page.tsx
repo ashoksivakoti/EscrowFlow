@@ -13,7 +13,6 @@ import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/ca
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { FieldError } from "@/components/ui/field-error";
-import { Spinner } from "@/components/ui/spinner";
 import { useAdminDisputesQuery } from "@/hooks/use-admin-disputes-query";
 import { useMeQuery } from "@/hooks/use-me-query";
 import { useSessionQuery } from "@/hooks/use-session-query";
@@ -45,10 +44,8 @@ export default function AdminDisputesPage() {
 
   if (sessionLoading || (meEnabled && meLoading)) {
     return (
-      <AuthShell title="Admin disputes" subtitle="Loading dispute management workspace...">
-        <div className="flex items-center justify-center py-20">
-          <Spinner />
-        </div>
+      <AuthShell title="Admin disputes" subtitle="Loading dispute management workspace..." iconBrandOnly>
+        <AdminDisputesSkeleton />
       </AuthShell>
     );
   }
@@ -62,6 +59,7 @@ export default function AdminDisputesPage() {
       <AuthShell
         title="Admin disputes"
         subtitle="This workspace is restricted to admin/arbitrator accounts."
+        iconBrandOnly
       >
         <Card>
           <CardHeader>
@@ -86,6 +84,7 @@ export default function AdminDisputesPage() {
       subtitle="Review evidence, validate payout math, and resolve disputes through on-chain or admin signer flows."
       className="overflow-x-hidden"
       containerClassName="max-w-6xl sm:max-w-6xl"
+      iconBrandOnly
     >
       <Card className="overflow-hidden">
         <CardHeader>
@@ -127,9 +126,7 @@ export default function AdminDisputesPage() {
 
       <div className="mt-5 space-y-4">
         {disputesLoading ? (
-          <div className="flex justify-center py-10">
-            <Spinner />
-          </div>
+          <AdminDisputesListSkeleton />
         ) : disputes && disputes.length > 0 ? (
           disputes.map((dispute) => <DisputeCard key={dispute.id} dispute={dispute} />)
         ) : (
@@ -144,6 +141,54 @@ export default function AdminDisputesPage() {
         )}
       </div>
     </AuthShell>
+  );
+}
+
+function AdminDisputesSkeleton() {
+  return (
+    <div className="space-y-5">
+      <Card className="overflow-hidden">
+        <div className="space-y-3 p-4 sm:p-6">
+          <div className="h-6 w-40 animate-pulse rounded bg-zinc-800" />
+          <div className="h-3 w-full animate-pulse rounded bg-zinc-900/80" />
+        </div>
+        <div className="grid grid-cols-1 gap-2 border-t border-zinc-800/90 px-4 py-4 sm:flex sm:flex-wrap sm:px-6 sm:py-5">
+          {Array.from({ length: 4 }).map((_, idx) => (
+            <div key={idx} className="h-9 w-full animate-pulse rounded-xl bg-zinc-900/80 sm:w-28" />
+          ))}
+        </div>
+      </Card>
+      <section className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        {Array.from({ length: 3 }).map((_, idx) => (
+          <Card key={idx} className="p-4 sm:p-5">
+            <div className="h-3 w-24 animate-pulse rounded bg-zinc-800" />
+            <div className="mt-3 h-6 w-20 animate-pulse rounded bg-zinc-800" />
+            <div className="mt-2 h-3 w-28 animate-pulse rounded bg-zinc-900/80" />
+          </Card>
+        ))}
+      </section>
+      <AdminDisputesListSkeleton />
+    </div>
+  );
+}
+
+function AdminDisputesListSkeleton() {
+  return (
+    <div className="space-y-4">
+      {Array.from({ length: 3 }).map((_, idx) => (
+        <Card key={idx} className="overflow-hidden p-4 sm:p-5">
+          <div className="space-y-3">
+            <div className="h-5 w-2/3 animate-pulse rounded bg-zinc-800" />
+            <div className="h-3 w-full animate-pulse rounded bg-zinc-900/80" />
+            <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+              <div className="h-24 animate-pulse rounded-xl bg-zinc-900/80" />
+              <div className="h-24 animate-pulse rounded-xl bg-zinc-900/80" />
+            </div>
+            <div className="h-24 animate-pulse rounded-xl bg-zinc-900/80" />
+          </div>
+        </Card>
+      ))}
+    </div>
   );
 }
 
@@ -169,8 +214,8 @@ function DisputeCard({ dispute }: { dispute: AdminDisputeDetail }) {
   const canResolve = ["OPEN", "AWAITING_RESPONSE", "UNDER_ADMIN_REVIEW"].includes(dispute.status);
   const hasOnchainContext = Boolean(
     dispute.project.chainId &&
-      dispute.project.escrowContractAddress &&
-      dispute.project.onChainProjectId,
+    dispute.project.escrowContractAddress &&
+    dispute.project.onChainProjectId,
   );
   const chainMismatch =
     hasOnchainContext &&
@@ -267,7 +312,7 @@ function DisputeCard({ dispute }: { dispute: AdminDisputeDetail }) {
   return (
     <Card className="overflow-hidden transition-all duration-200 hover:-translate-y-0.5">
       <CardHeader>
-          <CardTitle className="break-words text-base sm:text-lg">
+        <CardTitle className="break-words text-base sm:text-lg">
           {dispute.project.title} · M{dispute.milestone.sortOrder + 1} {dispute.milestone.title}
         </CardTitle>
         <CardDescription>
@@ -314,7 +359,7 @@ function DisputeCard({ dispute }: { dispute: AdminDisputeDetail }) {
                 href={toGatewayUrl(link)}
                 target="_blank"
                 rel="noreferrer"
-                  className="inline-flex min-h-8 items-center break-all rounded-md px-1.5 text-xs text-cyan-300 transition-colors hover:bg-cyan-300/10 hover:text-cyan-200"
+                className="inline-flex min-h-8 items-center break-all rounded-md px-1.5 text-xs text-cyan-300 transition-colors hover:bg-cyan-300/10 hover:text-cyan-200"
               >
                 {link}
               </a>

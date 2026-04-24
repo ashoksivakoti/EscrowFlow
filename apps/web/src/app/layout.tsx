@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import type { ReactNode } from "react";
 
+import { Footer } from "@/components/layout/footer";
 import { AppProviders } from "@/components/providers/app-providers";
 
 import "./globals.css";
@@ -15,6 +16,11 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "EscrowFlow",
   description: "Milestone-based freelance escrow on EVM",
+  icons: {
+    icon: [{ url: "/images/escrow_icon.png", type: "image/png" }],
+    shortcut: [{ url: "/images/escrow_icon.png", type: "image/png" }],
+    apple: [{ url: "/images/escrow_icon.png", type: "image/png" }],
+  },
 };
 
 export const viewport: Viewport = {
@@ -27,7 +33,12 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <body
         className={`${inter.variable} min-h-dvh overflow-x-hidden bg-zinc-950 font-sans antialiased text-zinc-100`}
       >
-        <AppProviders>{children}</AppProviders>
+        <AppProviders>
+          <div className="flex min-h-dvh flex-col">
+            <div className="flex-1">{children}</div>
+            <Footer />
+          </div>
+        </AppProviders>
       </body>
     </html>
   );

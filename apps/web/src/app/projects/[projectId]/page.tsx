@@ -9,7 +9,6 @@ import { DisputeCreatePanel } from "@/components/projects/dispute-create-panel";
 import { MilestoneApprovalPanel } from "@/components/projects/milestone-approval-panel";
 import { Button, buttonClassName } from "@/components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Spinner } from "@/components/ui/spinner";
 import { needsOnboarding } from "@/lib/auth/client-guards";
 import { useMeQuery } from "@/hooks/use-me-query";
 import { useProjectDetailQuery } from "@/hooks/use-project-detail-query";
@@ -45,9 +44,9 @@ export default function ProjectDetailShellPage() {
   const loading = !projectId || sessionLoading || (meEnabled && meLoading && !meFetched) || projectLoading;
   const isAssignedFreelancer = Boolean(
     me?.roles.includes("FREELANCER") &&
-      project &&
-      project.freelancer &&
-      me.id === project.freelancer.id,
+    project &&
+    project.freelancer &&
+    me.id === project.freelancer.id,
   );
   const isProjectClient = Boolean(me?.roles.includes("CLIENT") && me?.id === project?.client.id);
 
@@ -57,12 +56,10 @@ export default function ProjectDetailShellPage() {
       subtitle="Track funding, milestones, submissions, disputes, and transaction history in one place."
       className="overflow-x-hidden"
       containerClassName="max-w-5xl sm:max-w-5xl"
+      iconBrandOnly
     >
       {loading || !project ? (
-        <div className="flex flex-col items-center justify-center gap-4 py-20">
-          <Spinner />
-          <p className="text-sm text-zinc-600 dark:text-zinc-400">Loading project...</p>
-        </div>
+        <ProjectDetailSkeleton />
       ) : (
         <div className="flex w-full max-w-full flex-col gap-5">
           <Card className="overflow-hidden">
@@ -147,7 +144,7 @@ export default function ProjectDetailShellPage() {
           </Card>
 
           {project.openDispute ? (
-          <Card className="border-amber-300/35 bg-amber-300/10">
+            <Card className="border-amber-300/35 bg-amber-300/10">
               <CardHeader>
                 <CardTitle className="text-lg">Dispute requires attention</CardTitle>
                 <CardDescription>
@@ -239,9 +236,9 @@ export default function ProjectDetailShellPage() {
                       </div>
                     ) : null}
                     {isProjectClient &&
-                    project.latestSubmission &&
-                    project.latestSubmission.milestoneId === milestone.id &&
-                    canClientApprovePayout(project, milestone.status, milestone.openDisputeId) ? (
+                      project.latestSubmission &&
+                      project.latestSubmission.milestoneId === milestone.id &&
+                      canClientApprovePayout(project, milestone.status, milestone.openDisputeId) ? (
                       <MilestoneApprovalPanel
                         projectId={project.id}
                         milestoneId={milestone.id}
@@ -324,7 +321,7 @@ export default function ProjectDetailShellPage() {
                     </p>
                   ) : null}
                   {project.latestSubmission.deliverableFiles &&
-                  project.latestSubmission.deliverableFiles.length > 0 ? (
+                    project.latestSubmission.deliverableFiles.length > 0 ? (
                     <div className="mt-2 space-y-1">
                       <p className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
                         Deliverable files
@@ -421,6 +418,47 @@ export default function ProjectDetailShellPage() {
         </div>
       )}
     </AuthShell>
+  );
+}
+
+function ProjectDetailSkeleton() {
+  return (
+    <div className="flex w-full max-w-full flex-col gap-5">
+      <Card className="overflow-hidden">
+        <div className="space-y-3 p-4 sm:p-6">
+          <div className="h-8 w-3/4 animate-pulse rounded bg-zinc-800" />
+          <div className="h-4 w-full animate-pulse rounded bg-zinc-900/80" />
+          <div className="h-4 w-5/6 animate-pulse rounded bg-zinc-900/80" />
+        </div>
+        <div className="grid grid-cols-1 gap-3 px-4 pb-4 sm:grid-cols-2 sm:px-6 lg:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, idx) => (
+            <div
+              key={idx}
+              className="h-14 animate-pulse rounded-xl border border-zinc-800/90 bg-zinc-950/60"
+            />
+          ))}
+        </div>
+      </Card>
+      <Card>
+        <div className="space-y-3 p-4 sm:p-6">
+          <div className="h-6 w-32 animate-pulse rounded bg-zinc-800" />
+          {Array.from({ length: 3 }).map((_, idx) => (
+            <div key={idx} className="h-24 animate-pulse rounded-xl bg-zinc-900/80" />
+          ))}
+        </div>
+      </Card>
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+        {Array.from({ length: 2 }).map((_, idx) => (
+          <Card key={idx}>
+            <div className="space-y-3 p-4 sm:p-6">
+              <div className="h-6 w-36 animate-pulse rounded bg-zinc-800" />
+              <div className="h-16 animate-pulse rounded-xl bg-zinc-900/80" />
+              <div className="h-16 animate-pulse rounded-xl bg-zinc-900/80" />
+            </div>
+          </Card>
+        ))}
+      </div>
+    </div>
   );
 }
 

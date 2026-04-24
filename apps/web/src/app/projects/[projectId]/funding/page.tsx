@@ -9,7 +9,6 @@ import { ProjectFundingPanel } from "@/components/projects/project-funding-panel
 import { ProjectOnChainCreatePanel } from "@/components/projects/project-on-chain-create-panel";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Spinner } from "@/components/ui/spinner";
 import { needsOnboarding } from "@/lib/auth/client-guards";
 import { useMeQuery } from "@/hooks/use-me-query";
 import { useProjectDetailQuery } from "@/hooks/use-project-detail-query";
@@ -63,11 +62,11 @@ export default function ProjectFundingPage() {
 
   const canCreateOnChainEscrow = Boolean(
     project &&
-      hasOnChainTargets &&
-      !project.onChainProjectId &&
-      project.status === "AWAITING_ESCROW" &&
-      project.freelancer &&
-      project.milestones.length > 0,
+    hasOnChainTargets &&
+    !project.onChainProjectId &&
+    project.status === "AWAITING_ESCROW" &&
+    project.freelancer &&
+    project.milestones.length > 0,
   );
 
   return (
@@ -75,12 +74,10 @@ export default function ProjectFundingPage() {
       title="Project funding"
       subtitle="Approve token allowance and fund escrow with clear transaction status updates."
       className="overflow-x-hidden"
+      iconBrandOnly
     >
       {loading || !me || !projectFetched || !project ? (
-        <div className="flex flex-col items-center justify-center gap-4 py-20">
-          <Spinner />
-          <p className="text-sm text-zinc-600 dark:text-zinc-400">Loading funding panel...</p>
-        </div>
+        <ProjectFundingSkeleton />
       ) : !me.roles.includes("CLIENT") || project.client.id !== me.id ? (
         <Card>
           <CardHeader>
@@ -132,5 +129,26 @@ export default function ProjectFundingPage() {
         />
       )}
     </AuthShell>
+  );
+}
+
+function ProjectFundingSkeleton() {
+  return (
+    <Card className="overflow-hidden">
+      <div className="space-y-3 p-4 sm:p-6">
+        <div className="h-6 w-44 animate-pulse rounded bg-zinc-800" />
+        <div className="h-3 w-full animate-pulse rounded bg-zinc-900/80" />
+        <div className="h-3 w-3/4 animate-pulse rounded bg-zinc-900/80" />
+      </div>
+      <div className="space-y-3 border-t border-zinc-800/90 px-4 py-4 sm:px-6 sm:py-5">
+        {Array.from({ length: 4 }).map((_, idx) => (
+          <div key={idx} className="h-12 animate-pulse rounded-xl bg-zinc-900/80" />
+        ))}
+      </div>
+      <div className="flex flex-col gap-2 border-t border-zinc-800/90 px-4 py-4 sm:flex-row sm:justify-end sm:px-6">
+        <div className="h-10 w-full animate-pulse rounded-xl bg-zinc-900/80 sm:w-32" />
+        <div className="h-10 w-full animate-pulse rounded-xl bg-zinc-900/80 sm:w-40" />
+      </div>
+    </Card>
   );
 }

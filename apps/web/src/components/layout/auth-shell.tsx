@@ -1,6 +1,6 @@
+import Image from "next/image";
+import Link from "next/link";
 import type { ReactNode } from "react";
-
-import { BrandMark } from "@escrowflow/ui";
 
 import { cn } from "@/lib/cn";
 import { NotificationBell } from "@/components/notifications/notification-bell";
@@ -12,6 +12,8 @@ export function AuthShell({
   className,
   containerClassName,
   showNotifications = true,
+  iconBrandOnly = false,
+  headerActions,
 }: {
   title: string;
   subtitle?: string;
@@ -19,6 +21,8 @@ export function AuthShell({
   className?: string;
   containerClassName?: string;
   showNotifications?: boolean;
+  iconBrandOnly?: boolean;
+  headerActions?: ReactNode;
 }) {
   return (
     <div
@@ -47,25 +51,73 @@ export function AuthShell({
       >
         <header
           className={cn(
-            "relative mb-6 flex flex-col items-center gap-3 px-5 text-center sm:mb-8 sm:px-10",
-            showNotifications ? "pr-14 sm:pr-16" : undefined,
+            "relative mb-7 flex w-full flex-col items-center px-5 text-center sm:mb-9 sm:px-10",
+            iconBrandOnly ? "gap-4" : "gap-4",
+            showNotifications || headerActions ? "px-14 sm:px-16 md:px-40" : undefined,
           )}
         >
-          {showNotifications ? (
-            <div className="absolute -top-1 right-0 sm:top-0 sm:right-1">
-              <NotificationBell />
+          {showNotifications || headerActions ? (
+            <div className="absolute -top-1 right-0 z-20 flex items-center gap-2 sm:top-0 sm:right-1">
+              {showNotifications ? <NotificationBell /> : null}
+              {headerActions ? <div className="flex items-center gap-2">{headerActions}</div> : null}
             </div>
           ) : null}
-          <BrandMark />
-          <div className="space-y-1.5">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-cyan-300">
-              EscrowFlow
-            </p>
-            <h1 className="text-[1.65rem] font-semibold tracking-tight text-white sm:text-3xl">
+          <Link
+            href="/"
+            aria-label="EscrowFlow home"
+            className={cn(
+              "inline-flex max-w-full items-center justify-center transition-colors",
+              iconBrandOnly
+                ? "flex-col gap-0.5 px-2 py-1"
+                : "rounded-xl border border-zinc-800/90 bg-zinc-900/65 px-3 py-2 shadow-[0_10px_20px_-14px_rgba(0,0,0,0.95)] hover:border-cyan-300/35",
+            )}
+          >
+            {iconBrandOnly ? (
+              <>
+                <Image
+                  src="/images/escrow_icon.png"
+                  alt="EscrowFlow logo"
+                  width={1254}
+                  height={1254}
+                  className="h-20 w-20 object-contain sm:h-24 sm:w-24"
+                  priority
+                />
+                <span className="bg-gradient-to-b from-zinc-100 via-zinc-300 to-cyan-200 bg-clip-text text-xs font-semibold uppercase tracking-[0.2em] text-transparent drop-shadow-[0_0_10px_rgba(34,211,238,0.2)] sm:text-sm">
+                  EscrowFlow
+                </span>
+              </>
+            ) : (
+              <>
+                <Image
+                  src="/images/escrow_icon.png"
+                  alt="EscrowFlow logo"
+                  width={1254}
+                  height={1254}
+                  className="h-7 w-7 object-contain sm:hidden"
+                  priority
+                />
+                <Image
+                  src="/images/escrow_logo.png"
+                  alt="EscrowFlow logo"
+                  width={1536}
+                  height={1024}
+                  className="hidden h-auto w-[132px] max-w-full object-contain sm:block md:w-[156px]"
+                  priority
+                />
+              </>
+            )}
+          </Link>
+          <div className={cn(iconBrandOnly ? "space-y-1.5" : "space-y-1.5")}>
+            {iconBrandOnly ? null : (
+              <p className="bg-gradient-to-b from-zinc-100 via-zinc-300 to-cyan-200 bg-clip-text text-[10px] font-semibold uppercase tracking-[0.18em] text-transparent drop-shadow-[0_0_10px_rgba(34,211,238,0.2)]">
+                EscrowFlow
+              </p>
+            )}
+            <h1 className="text-balance text-[1.65rem] font-semibold tracking-tight text-white sm:text-3xl">
               {title}
             </h1>
             {subtitle ? (
-              <p className="max-w-md text-pretty text-sm leading-relaxed text-zinc-300/95">
+              <p className="max-w-xl text-pretty text-sm leading-relaxed text-zinc-300/95">
                 {subtitle}
               </p>
             ) : null}

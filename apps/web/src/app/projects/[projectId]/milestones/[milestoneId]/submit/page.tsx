@@ -19,7 +19,6 @@ import { FieldError } from "@/components/ui/field-error";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Spinner } from "@/components/ui/spinner";
 import { useMeQuery } from "@/hooks/use-me-query";
 import { useProjectDetailQuery } from "@/hooks/use-project-detail-query";
 import { useSessionQuery } from "@/hooks/use-session-query";
@@ -81,17 +80,17 @@ export default function MilestoneSubmissionPage() {
   );
   const isFreelancerOwner = Boolean(
     me &&
-      project &&
-      me.roles.includes("FREELANCER") &&
-      project.freelancer &&
-      project.freelancer.id === me.id,
+    project &&
+    me.roles.includes("FREELANCER") &&
+    project.freelancer &&
+    project.freelancer.id === me.id,
   );
 
   const chainMismatch = Boolean(
     project &&
-      projectHasEscrowBinding(project) &&
-      project.chainId != null &&
-      activeChainId !== project.chainId,
+    projectHasEscrowBinding(project) &&
+    project.chainId != null &&
+    activeChainId !== project.chainId,
   );
 
   async function confirmSubmitMilestoneOnChain(
@@ -236,12 +235,10 @@ export default function MilestoneSubmissionPage() {
       subtitle="Upload deliverables, add context, and publish signed submission metadata to IPFS."
       className="overflow-x-hidden"
       containerClassName="max-w-3xl sm:max-w-3xl"
+      iconBrandOnly
     >
       {loading || !project || !milestone || !me ? (
-        <div className="flex flex-col items-center justify-center gap-4 py-20">
-          <Spinner />
-          <p className="text-sm text-zinc-600 dark:text-zinc-400">Preparing submission form...</p>
-        </div>
+        <MilestoneSubmissionSkeleton />
       ) : (
         <div className="flex flex-col gap-5">
           <Card className="overflow-hidden">
@@ -441,6 +438,28 @@ export default function MilestoneSubmissionPage() {
   );
 }
 
+function MilestoneSubmissionSkeleton() {
+  return (
+    <Card className="overflow-hidden">
+      <div className="space-y-3 p-4 sm:p-6">
+        <div className="h-6 w-56 animate-pulse rounded bg-zinc-800" />
+        <div className="h-3 w-full animate-pulse rounded bg-zinc-900/80" />
+      </div>
+      <div className="space-y-3 px-4 pb-6 sm:px-6">
+        <div className="h-16 animate-pulse rounded-xl bg-zinc-900/80" />
+        <div className="h-16 animate-pulse rounded-xl bg-zinc-900/80" />
+        <div className="h-24 animate-pulse rounded-xl bg-zinc-900/80" />
+        <div className="h-12 animate-pulse rounded-xl bg-zinc-900/80" />
+        <div className="h-24 animate-pulse rounded-xl bg-zinc-900/80" />
+        <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+          <div className="h-10 w-full animate-pulse rounded-xl bg-zinc-900/80 sm:w-36" />
+          <div className="h-10 w-full animate-pulse rounded-xl bg-zinc-900/80 sm:w-44" />
+        </div>
+      </div>
+    </Card>
+  );
+}
+
 function projectHasEscrowBinding(project: ProjectDetail): boolean {
   return Boolean(
     project.onChainProjectId && project.escrowContractAddress && project.chainId != null,
@@ -519,9 +538,9 @@ function postSubmissionWithProgress(
       }
       const message =
         typeof parsed === "object" &&
-        parsed &&
-        "error" in parsed &&
-        typeof (parsed as { error?: { message?: unknown } }).error?.message === "string"
+          parsed &&
+          "error" in parsed &&
+          typeof (parsed as { error?: { message?: unknown } }).error?.message === "string"
           ? (parsed as { error: { message: string } }).error.message
           : `Submission failed (${xhr.status})`;
       reject(new Error(message));

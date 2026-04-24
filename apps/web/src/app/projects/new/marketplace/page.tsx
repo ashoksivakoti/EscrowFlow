@@ -46,6 +46,7 @@ export default function NewMarketplaceProjectPage() {
       subtitle="Create milestones without a freelancer wallet. Freelancers apply; you accept one to start escrow."
       className="overflow-x-hidden"
       containerClassName="max-w-3xl sm:max-w-3xl"
+      iconBrandOnly
     >
       {loading || !me ? (
         <div className="flex flex-col items-center justify-center gap-4 py-20">
