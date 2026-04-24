@@ -13,7 +13,8 @@ import {
  *
  * Env:
  *   REGISTRY_ADMIN_ADDRESS — receives DEFAULT_ADMIN_ROLE + PAUSER_ROLE (defaults to deployer)
- *   ARBITRATOR_ADDRESS — optional; granted ARBITRATOR_ROLE after deploy (defaults to admin)
+ *   ARBITRATOR_ADDRESS — optional; granted ARBITRATOR_ROLE after deploy (must NOT be admin/pauser)
+ *   ALLOWED_PAYMENT_TOKEN_ADDRESS — optional ERC20 token to allowlist for createProject
  *
  * Usage:
  *   pnpm exec hardhat run scripts/deploy-registry.ts --network localhost
@@ -36,21 +37,49 @@ async function main() {
   const registry = deployed as unknown as EscrowFlowRegistry;
   const registryAddress = await ethers.resolveAddress(registry);
 
-  const arbitrator =
-    process.env.ARBITRATOR_ADDRESS?.trim() || admin;
-  if (!ethers.isAddress(arbitrator)) {
+  const arbitrator = process.env.ARBITRATOR_ADDRESS?.trim() || "";
+  if (arbitrator && !ethers.isAddress(arbitrator)) {
     throw new Error("ARBITRATOR_ADDRESS must be a valid address");
+  }
+  if (arbitrator && arbitrator.toLowerCase() === admin.toLowerCase()) {
+    throw new Error("ARBITRATOR_ADDRESS must differ from REGISTRY_ADMIN_ADDRESS");
+  }
+  const allowedPaymentTokenAddress =
+    process.env.ALLOWED_PAYMENT_TOKEN_ADDRESS?.trim() || "";
+  if (
+    allowedPaymentTokenAddress &&
+    !ethers.isAddress(allowedPaymentTokenAddress)
+  ) {
+    throw new Error("ALLOWED_PAYMENT_TOKEN_ADDRESS must be a valid address");
   }
 
   if (deployerAddress.toLowerCase() === admin.toLowerCase()) {
-    const ARBITRATOR_ROLE = await registry.ARBITRATOR_ROLE();
-    await registry.connect(deployer).grantRole(ARBITRATOR_ROLE, arbitrator);
+    if (arbitrator) {
+      const ARBITRATOR_ROLE = await registry.ARBITRATOR_ROLE();
+      await registry.connect(deployer).grantRole(ARBITRATOR_ROLE, arbitrator);
+    } else {
+      console.warn(
+        "[deploy-registry] ARBITRATOR_ADDRESS not set; grant ARBITRATOR_ROLE from admin before production use.",
+      );
+    }
+    if (allowedPaymentTokenAddress) {
+      await registry
+        .connect(deployer)
+        .setAllowedToken(allowedPaymentTokenAddress, true);
+    }
   } else {
     console.warn(
-      "[deploy-registry] Deployer is not REGISTRY_ADMIN_ADDRESS; grant ARBITRATOR_ROLE to",
-      arbitrator,
-      "from the admin account.",
+      "[deploy-registry] Deployer is not REGISTRY_ADMIN_ADDRESS; perform role grants from the admin account.",
     );
+    if (arbitrator) {
+      console.warn("[deploy-registry] Grant ARBITRATOR_ROLE to:", arbitrator);
+    }
+    if (allowedPaymentTokenAddress) {
+      console.warn(
+        "[deploy-registry] Deployer is not admin; allowlist token manually from admin:",
+        allowedPaymentTokenAddress,
+      );
+    }
   }
 
   const contractsPackageRoot = path.join(__dirname, "..");
@@ -66,7 +95,7 @@ async function main() {
     roles: {
       defaultAdmin: admin,
       pauser: admin,
-      arbitratorGranted: arbitrator,
+      ...(arbitrator ? { arbitratorGranted: arbitrator } : {}),
     },
     notes: "Grant ARBITRATOR_ROLE to multisig in production; admin holds DEFAULT_ADMIN_ROLE.",
   };
