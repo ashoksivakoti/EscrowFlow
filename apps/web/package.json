@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "validate:env": "node ./scripts/validate-env.mjs",
+    "sanity:contract": "node ./scripts/sanity-check-contract-integration.mjs",
     "event-sync:trigger": "node ./scripts/trigger-event-sync.mjs"
   },
   "dependencies": {

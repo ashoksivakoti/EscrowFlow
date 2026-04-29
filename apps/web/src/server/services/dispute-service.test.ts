@@ -62,12 +62,14 @@ describe("createMilestoneDisputeForParticipant", () => {
   it("creates dispute for valid project participant", async () => {
     prismaMock.milestone.findFirst.mockResolvedValue({
       id: "milestone_1",
+      sortOrder: 0,
       status: MilestoneStatus.SUBMITTED,
       project: {
         id: "project_1",
         status: ProjectStatus.ACTIVE,
         chainId: 31337,
         escrowContractAddress: "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
+        onChainProjectId: "7",
         clientUserId: "client_1",
         freelancerUserId: "freelancer_1",
       },
@@ -126,6 +128,12 @@ describe("createMilestoneDisputeForParticipant", () => {
             fileBase64: "SGVsbG8=",
           },
         ],
+        reasonUri: "escrowflow://disputes/reason/0xabc",
+        chainId: 31337,
+        escrowContractAddress: "0xe7f1725e7734ce288f8367e1bb143e90bb3f0512",
+        onChainProjectId: "7",
+        milestoneIndex: 0,
+        disputeTxHash: `0x${"2".repeat(64)}`,
         relatedSubmissionId: "submission_1",
       },
     });
@@ -145,12 +153,14 @@ describe("createMilestoneDisputeForParticipant", () => {
   it("rejects when user is not participant", async () => {
     prismaMock.milestone.findFirst.mockResolvedValue({
       id: "milestone_1",
+      sortOrder: 0,
       status: MilestoneStatus.SUBMITTED,
       project: {
         id: "project_1",
         status: ProjectStatus.ACTIVE,
         chainId: 31337,
         escrowContractAddress: "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
+        onChainProjectId: "7",
         clientUserId: "client_1",
         freelancerUserId: "freelancer_1",
       },
@@ -172,6 +182,12 @@ describe("createMilestoneDisputeForParticipant", () => {
               fileBase64: "SGVsbG8=",
             },
           ],
+          reasonUri: "escrowflow://disputes/reason/0xabc",
+          chainId: 31337,
+          escrowContractAddress: "0xe7f1725e7734ce288f8367e1bb143e90bb3f0512",
+          onChainProjectId: "7",
+          milestoneIndex: 0,
+          disputeTxHash: `0x${"2".repeat(64)}`,
         },
       }),
     ).rejects.toMatchObject({
@@ -183,12 +199,14 @@ describe("createMilestoneDisputeForParticipant", () => {
   it("rejects when milestone state does not allow disputes", async () => {
     prismaMock.milestone.findFirst.mockResolvedValue({
       id: "milestone_1",
+      sortOrder: 0,
       status: MilestoneStatus.IN_PROGRESS,
       project: {
         id: "project_1",
         status: ProjectStatus.ACTIVE,
         chainId: 31337,
         escrowContractAddress: "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
+        onChainProjectId: "7",
         clientUserId: "client_1",
         freelancerUserId: "freelancer_1",
       },
@@ -215,6 +233,12 @@ describe("createMilestoneDisputeForParticipant", () => {
               fileBase64: "SGVsbG8=",
             },
           ],
+          reasonUri: "escrowflow://disputes/reason/0xabc",
+          chainId: 31337,
+          escrowContractAddress: "0xe7f1725e7734ce288f8367e1bb143e90bb3f0512",
+          onChainProjectId: "7",
+          milestoneIndex: 0,
+          disputeTxHash: `0x${"2".repeat(64)}`,
         },
       }),
     ).rejects.toMatchObject({

@@ -2,6 +2,13 @@ import { z } from "zod";
 import fs from "node:fs";
 import path from "node:path";
 
+const CANONICAL_CHAIN_ID = 421614;
+const CANONICAL_ESCROW_REGISTRY_ADDRESS =
+  "0xe5af7e2cf6435de6b0a0520518fcaaab851bb40c";
+const CANONICAL_DEPLOYMENT_BLOCK = 263614332;
+const DEPRECATED_ESCROW_REGISTRY_ADDRESS =
+  "0x268993a0e0342972a52c58aa2dd1a9953fd57acf";
+
 loadEnvFile(path.resolve(process.cwd(), ".env.local"));
 loadEnvFile(path.resolve(process.cwd(), "../../.env"));
 
@@ -21,7 +28,14 @@ const schema = z.object({
   EVENT_SYNC_CONTRACT_ADDRESS: z
     .string()
     .trim()
-    .regex(/^0x[a-fA-F0-9]{40}$/, "EVENT_SYNC_CONTRACT_ADDRESS must be a valid EVM address"),
+    .regex(/^0x[a-fA-F0-9]{40}$/, "EVENT_SYNC_CONTRACT_ADDRESS must be a valid EVM address")
+    .transform((v) => v.toLowerCase())
+    .refine(
+      (v) => v !== DEPRECATED_ESCROW_REGISTRY_ADDRESS,
+      "EVENT_SYNC_CONTRACT_ADDRESS must not use deprecated EscrowFlowRegistry",
+    ),
+  EVENT_SYNC_SCOPE: z.string().trim().min(1).optional(),
+  EVENT_SYNC_START_BLOCK: z.coerce.number().int().positive().optional(),
   EVENT_SYNC_TRIGGER_TOKEN: z
     .string()
     .min(16, "EVENT_SYNC_TRIGGER_TOKEN should be at least 16 chars")
@@ -39,6 +53,37 @@ if (!parsed.success) {
 
 const warnings = [];
 if (process.env.NODE_ENV === "production") {
+  if (!process.env.EVENT_SYNC_START_BLOCK?.trim()) {
+    console.error(
+      "Environment validation failed for apps/web:\n- EVENT_SYNC_START_BLOCK: required in production and must be a positive integer",
+    );
+    process.exit(1);
+  }
+  if (Number(process.env.EVENT_SYNC_START_BLOCK) <= 0) {
+    console.error(
+      "Environment validation failed for apps/web:\n- EVENT_SYNC_START_BLOCK: must be a positive integer in production",
+    );
+    process.exit(1);
+  }
+  if (parsed.data.EVENT_SYNC_CHAIN_ID !== CANONICAL_CHAIN_ID) {
+    console.error(
+      `Environment validation failed for apps/web:\n- EVENT_SYNC_CHAIN_ID: must be ${CANONICAL_CHAIN_ID} in production`,
+    );
+    process.exit(1);
+  }
+  if (parsed.data.EVENT_SYNC_CONTRACT_ADDRESS !== CANONICAL_ESCROW_REGISTRY_ADDRESS) {
+    console.error(
+      "Environment validation failed for apps/web:\n- EVENT_SYNC_CONTRACT_ADDRESS: must match canonical EscrowFlowRegistry in production",
+    );
+    process.exit(1);
+  }
+  if (Number(process.env.EVENT_SYNC_START_BLOCK) !== CANONICAL_DEPLOYMENT_BLOCK) {
+    console.error(
+      `Environment validation failed for apps/web:\n- EVENT_SYNC_START_BLOCK: must be canonical deployment block ${CANONICAL_DEPLOYMENT_BLOCK} in production`,
+    );
+    process.exit(1);
+  }
+
   if (parsed.data.AUTH_SIWE_URI.startsWith("http://")) {
     warnings.push("AUTH_SIWE_URI uses http:// in production (https:// recommended).");
   }
@@ -48,6 +93,20 @@ if (process.env.NODE_ENV === "production") {
   if (!parsed.data.EVENT_SYNC_TRIGGER_TOKEN) {
     warnings.push("EVENT_SYNC_TRIGGER_TOKEN is unset; internal sync endpoint is unprotected.");
   }
+}
+
+if (parsed.data.EVENT_SYNC_CONTRACT_ADDRESS !== CANONICAL_ESCROW_REGISTRY_ADDRESS) {
+  console.error(
+    "Environment validation failed for apps/web:\n- EVENT_SYNC_CONTRACT_ADDRESS: must match canonical EscrowFlowRegistry",
+  );
+  process.exit(1);
+}
+
+const canonicalScope = `ESCROW_REGISTRY:${parsed.data.EVENT_SYNC_CONTRACT_ADDRESS}`;
+if (!parsed.data.EVENT_SYNC_SCOPE) {
+  warnings.push(`EVENT_SYNC_SCOPE is unset; recommended value: ${canonicalScope}`);
+} else if (parsed.data.EVENT_SYNC_SCOPE !== canonicalScope) {
+  warnings.push(`EVENT_SYNC_SCOPE should be address-scoped as ${canonicalScope}`);
 }
 
 if (warnings.length > 0) {

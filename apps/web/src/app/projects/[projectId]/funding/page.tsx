@@ -13,6 +13,7 @@ import { needsOnboarding } from "@/lib/auth/client-guards";
 import { useMeQuery } from "@/hooks/use-me-query";
 import { useProjectDetailQuery } from "@/hooks/use-project-detail-query";
 import { useSessionQuery } from "@/hooks/use-session-query";
+import { useContractPaused } from "@/components/providers/contract-pause-provider";
 
 export default function ProjectFundingPage() {
   const router = useRouter();
@@ -24,6 +25,8 @@ export default function ProjectFundingPage() {
   const { data: me, isPending: meLoading, isFetched: meFetched } = useMeQuery(meEnabled);
   const { data: project, isPending: projectLoading, isFetched: projectFetched } =
     useProjectDetailQuery(projectId, meEnabled);
+
+  const { paused: contractPaused } = useContractPaused();
 
   useEffect(() => {
     if (sessionLoading) {
@@ -78,6 +81,18 @@ export default function ProjectFundingPage() {
     >
       {loading || !me || !projectFetched || !project ? (
         <ProjectFundingSkeleton />
+      ) : contractPaused ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Contract paused</CardTitle>
+            <CardDescription>Funding actions are disabled until the contract is unpaused.</CardDescription>
+          </CardHeader>
+          <div className="px-4 pb-4 sm:px-6">
+            <Button type="button" className="w-full sm:w-auto" onClick={() => router.push(`/projects/${projectId}`)}>
+              Back to project
+            </Button>
+          </div>
+        </Card>
       ) : !me.roles.includes("CLIENT") || project.client.id !== me.id ? (
         <Card>
           <CardHeader>

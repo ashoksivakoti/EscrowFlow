@@ -1,8 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { keccak256, stringToHex } from "viem";
+import { useAccount, useChainId, usePublicClient, useSwitchChain, useWalletClient } from "wagmi";
 
+import { escrowRegistryAbi } from "@/lib/contracts/escrow-registry-abi.full";
+import { formatEscrowRegistryWriteError } from "@/lib/contracts/decode-error";
+import { mapMilestoneStatusToContract } from "@/lib/contracts/status-mapping";
 import { Button } from "@/components/ui/button";
 import { FieldError } from "@/components/ui/field-error";
 import { Input } from "@/components/ui/input";
@@ -11,14 +16,86 @@ import { Textarea } from "@/components/ui/textarea";
 export function DisputeCreatePanel(props: {
   projectId: string;
   milestoneId: string;
+  chainId: number;
+  escrowContractAddress: `0x${string}`;
+  onChainProjectId: string;
+  milestoneIndex: number;
+  milestoneDueAt: string | null;
+  milestoneStatus: string;
+  projectStatus: string;
+  milestoneOpenDisputeId: string | null;
+  milestones: Array<{ sortOrder: number; status: string }>;
+  clientWalletAddress: string;
+  freelancerWalletAddress: string | null;
   relatedSubmissionId?: string | null;
 }) {
   const queryClient = useQueryClient();
+  const activeChainId = useChainId();
+  const { address } = useAccount();
+  const publicClient = usePublicClient({ chainId: props.chainId });
+  const { data: walletClient } = useWalletClient({ chainId: props.chainId });
+  const { switchChainAsync } = useSwitchChain();
   const [reason, setReason] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const [phase, setPhase] = useState<"idle" | "signing" | "pending" | "reconciling">("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  const chainMismatch = activeChainId !== props.chainId;
+  const isParticipant = useMemo(() => {
+    if (!address) return false;
+    const normalized = address.toLowerCase();
+    if (normalized === props.clientWalletAddress.toLowerCase()) {
+      return true;
+    }
+    return Boolean(
+      props.freelancerWalletAddress &&
+        normalized === props.freelancerWalletAddress.toLowerCase(),
+    );
+  }, [address, props.clientWalletAddress, props.freelancerWalletAddress]);
+  const deadlineReached = useMemo(() => {
+    if (!props.milestoneDueAt) return true;
+    const due = new Date(props.milestoneDueAt);
+    if (Number.isNaN(due.getTime())) return true;
+    return Date.now() >= due.getTime();
+  }, [props.milestoneDueAt]);
+  const sequenceReady = useMemo(() => {
+    return props.milestones
+      .filter((m) => m.sortOrder < props.milestoneIndex)
+      .every((m) => {
+        const mapped = mapMilestoneStatusToContract(m.status);
+        return mapped === "Released" || mapped === "Refunded";
+      });
+  }, [props.milestoneIndex, props.milestones]);
+
+  function reasonUri(reasonText: string): string {
+    const digest = keccak256(stringToHex(reasonText));
+    return `escrowflow://disputes/reason/${digest}`;
+  }
+
+  function guardError(): string | null {
+    if (!isParticipant) {
+      return "Only the project client or freelancer can raise a dispute.";
+    }
+    if (props.milestoneOpenDisputeId) {
+      return "This milestone already has an active dispute.";
+    }
+    if (props.projectStatus !== "ACTIVE" && props.projectStatus !== "DISPUTED") {
+      return "Project status does not allow dispute creation.";
+    }
+    const mappedMilestone = mapMilestoneStatusToContract(props.milestoneStatus);
+    if (mappedMilestone !== "Submitted" && mappedMilestone !== "Approved") {
+      return "Milestone status does not allow raising a dispute.";
+    }
+    if (!deadlineReached) {
+      return "Milestone deadline has not been reached yet.";
+    }
+    if (!sequenceReady) {
+      return "Complete earlier milestones before raising a dispute on this milestone.";
+    }
+    return null;
+  }
 
   async function onSubmitDispute(): Promise<void> {
     setErrorMessage(null);
@@ -32,9 +109,40 @@ export function DisputeCreatePanel(props: {
       setErrorMessage("Please upload at least one evidence file.");
       return;
     }
+    const blocked = guardError();
+    if (blocked) {
+      setErrorMessage(blocked);
+      return;
+    }
+    if (!walletClient || !publicClient || !address) {
+      setErrorMessage("Connect your wallet to create the dispute on-chain.");
+      return;
+    }
+    if (chainMismatch) {
+      setErrorMessage(`Switch your wallet to chain ${props.chainId} before raising dispute.`);
+      return;
+    }
 
     setSubmitting(true);
     try {
+      const normalizedReason = reason.trim();
+      const disputeReasonUri = reasonUri(normalizedReason);
+      setPhase("signing");
+      const disputeTxHash = await walletClient.writeContract({
+        address: props.escrowContractAddress,
+        abi: escrowRegistryAbi,
+        functionName: "raiseDispute",
+        args: [
+          BigInt(props.onChainProjectId),
+          BigInt(props.milestoneIndex),
+          disputeReasonUri,
+        ],
+        chain: walletClient.chain,
+        account: walletClient.account,
+      });
+      setPhase("pending");
+      await publicClient.waitForTransactionReceipt({ hash: disputeTxHash });
+
       const encodedFiles = await Promise.all(
         files.map(async (file) => ({
           fileName: file.name,
@@ -43,6 +151,7 @@ export function DisputeCreatePanel(props: {
         })),
       );
 
+      setPhase("reconciling");
       const response = await fetch(
         `/api/v1/projects/${props.projectId}/milestones/${props.milestoneId}/disputes`,
         {
@@ -50,7 +159,13 @@ export function DisputeCreatePanel(props: {
           credentials: "include",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            reason: reason.trim(),
+            reason: normalizedReason,
+            reasonUri: disputeReasonUri,
+            chainId: props.chainId,
+            escrowContractAddress: props.escrowContractAddress,
+            onChainProjectId: props.onChainProjectId,
+            milestoneIndex: props.milestoneIndex,
+            disputeTxHash,
             files: encodedFiles,
             relatedSubmissionId: props.relatedSubmissionId ?? null,
           }),
@@ -64,16 +179,18 @@ export function DisputeCreatePanel(props: {
       }
 
       setSuccessMessage(
-        "Dispute submitted. This milestone is now frozen while admin/arbitrator review is pending.",
+        "Dispute confirmed on-chain and reconciled in app state. Milestone is now frozen pending review.",
       );
       setReason("");
       setFiles([]);
       await queryClient.invalidateQueries({ queryKey: ["project", props.projectId] });
       await queryClient.invalidateQueries({ queryKey: ["projects"] });
+      await queryClient.invalidateQueries({ queryKey: ["admin-disputes"] });
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Could not raise dispute");
+      setErrorMessage(formatEscrowRegistryWriteError(error, "Could not raise dispute"));
     } finally {
       setSubmitting(false);
+      setPhase("idle");
     }
   }
 
@@ -83,9 +200,29 @@ export function DisputeCreatePanel(props: {
         Raise dispute
       </p>
       <p className="mt-2 text-xs leading-relaxed text-amber-100/85">
-        Raising a dispute freezes approval/release actions for this milestone until review is
-        resolved. Attach evidence files to support your claim (up to 5 files).
+        This action sends an on-chain <code>raiseDispute</code> transaction first. App records are
+        reconciled only after transaction confirmation. Attach evidence files to support your claim
+        (up to 5 files).
       </p>
+      {chainMismatch ? (
+        <div className="mt-2 rounded-lg border border-amber-300/35 bg-amber-300/10 p-2 text-xs text-amber-100">
+          <p>Wallet network mismatch. Switch to chain {props.chainId} first.</p>
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            className="mt-2 w-full sm:w-auto"
+            onClick={() => void switchChainAsync({ chainId: props.chainId })}
+          >
+            Switch network
+          </Button>
+        </div>
+      ) : null}
+      {guardError() ? (
+        <div className="mt-2 rounded-lg border border-amber-300/35 bg-amber-300/10 p-2 text-xs text-amber-100">
+          {guardError()}
+        </div>
+      ) : null}
 
       <div className="mt-3 space-y-3">
         <div className="space-y-1">
@@ -141,9 +278,24 @@ export function DisputeCreatePanel(props: {
         ) : null}
 
         <FieldError message={errorMessage ?? undefined} className="text-xs" />
+        {submitting ? (
+          <p className="text-xs text-zinc-300">
+            {phase === "signing"
+              ? "Waiting wallet signature for on-chain dispute..."
+              : phase === "pending"
+                ? "Waiting on-chain dispute confirmation..."
+                : "Reconciling confirmed dispute in app state..."}
+          </p>
+        ) : null}
 
         <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-          <Button type="button" size="sm" className="w-full sm:w-auto" disabled={submitting} onClick={() => void onSubmitDispute()}>
+          <Button
+            type="button"
+            size="sm"
+            className="w-full sm:w-auto"
+            disabled={submitting || Boolean(guardError())}
+            onClick={() => void onSubmitDispute()}
+          >
             {submitting ? "Submitting dispute…" : "Submit dispute"}
           </Button>
         </div>

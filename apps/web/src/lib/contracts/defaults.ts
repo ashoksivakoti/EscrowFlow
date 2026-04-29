@@ -4,6 +4,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { isAddress } from "viem";
 import { z } from "zod";
+import { canonicalDeployment } from "@/lib/contracts/contract-addresses";
 
 const schema = z.object({
   CONTRACTS_DEFAULT_CHAIN_ID: z.coerce.number().int().positive().optional(),
@@ -42,11 +43,14 @@ export function getContractRuntimeDefaults(): ContractRuntimeDefaults {
   const fromArtifact = readDeploymentArtifact(env.CONTRACTS_DEPLOYMENT_PATH);
 
   cachedDefaults = {
-    chainId: env.CONTRACTS_DEFAULT_CHAIN_ID ?? fromArtifact?.chainId ?? null,
+    chainId:
+      env.CONTRACTS_DEFAULT_CHAIN_ID ??
+      fromArtifact?.chainId ??
+      canonicalDeployment.chainId,
     escrowContractAddress:
       env.CONTRACTS_ESCROW_REGISTRY_ADDRESS ??
       fromArtifact?.contracts?.EscrowFlowRegistry?.toLowerCase() ??
-      null,
+      canonicalDeployment.contracts.EscrowFlowRegistry,
     paymentTokenAddress:
       env.CONTRACTS_PAYMENT_TOKEN_ADDRESS ??
       fromArtifact?.contracts?.MockERC20Stablecoin?.toLowerCase() ??

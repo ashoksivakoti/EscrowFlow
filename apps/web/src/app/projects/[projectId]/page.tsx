@@ -5,8 +5,12 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect } from "react";
 
 import { AuthShell } from "@/components/layout/auth-shell";
+import { AlternativeRecipientPanel } from "@/components/projects/alternative-recipient-panel";
+import { DisputeEvidenceAppendPanel } from "@/components/projects/dispute-evidence-append-panel";
 import { DisputeCreatePanel } from "@/components/projects/dispute-create-panel";
 import { MilestoneApprovalPanel } from "@/components/projects/milestone-approval-panel";
+import { ResolveStaleDisputeByTimeoutPanel } from "@/components/projects/resolve-stale-dispute-by-timeout-panel";
+import { CancelProjectPanel } from "@/components/projects/cancel-project-panel";
 import { Button, buttonClassName } from "@/components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { needsOnboarding } from "@/lib/auth/client-guards";
@@ -14,11 +18,20 @@ import { useMeQuery } from "@/hooks/use-me-query";
 import { useProjectDetailQuery } from "@/hooks/use-project-detail-query";
 import { useSessionQuery } from "@/hooks/use-session-query";
 import { getExplorerTxUrl } from "@/lib/chains/explorer";
+import { useContractPaused } from "@/components/providers/contract-pause-provider";
+import {
+  canRaiseDispute,
+  canSubmitMilestone,
+  formatMilestoneStatusLabel,
+  guardReasonMessage,
+} from "@/lib/contracts/status-mapping";
 
 export default function ProjectDetailShellPage() {
   const router = useRouter();
   const params = useParams<{ projectId: string }>();
   const projectId = params?.projectId ?? null;
+
+  const { paused: contractPaused, isLoading: contractPauseLoading } = useContractPaused();
 
   const { data: session, isPending: sessionLoading } = useSessionQuery();
   const meEnabled = Boolean(session?.authenticated);
@@ -131,6 +144,27 @@ export default function ProjectDetailShellPage() {
               </div>
             ) : null}
 
+            {!contractPauseLoading && !contractPaused &&
+              isProjectClient &&
+              project.chainId &&
+              project.escrowContractAddress &&
+              project.onChainProjectId ? (
+              <CancelProjectPanel
+                projectId={project.id}
+                chainId={project.chainId}
+                escrowContractAddress={project.escrowContractAddress as `0x${string}`}
+                onChainProjectId={project.onChainProjectId}
+                clientWalletAddress={project.client.walletAddress}
+                projectStatus={project.status}
+                milestones={project.milestones.map((m) => ({
+                  id: m.id,
+                  sortOrder: m.sortOrder,
+                  title: m.title,
+                  status: m.status,
+                }))}
+              />
+            ) : null}
+
             <div className="mt-4 flex flex-col gap-3 px-4 pb-4 sm:flex-row sm:justify-end sm:px-6 sm:pb-6">
               <Button variant="secondary" className="w-full sm:w-auto" onClick={() => router.push("/projects")}>
                 Back to projects
@@ -187,10 +221,10 @@ export default function ProjectDetailShellPage() {
                           {milestone.sortOrder + 1}. {milestone.title}
                         </p>
                         <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
-                          Amount: {formatWei(milestone.amountWei)} · Status: {prettyStatus(milestone.status)}
+                          Amount: {formatWei(milestone.amountWei)} · Status: {formatMilestoneStatusLabel(milestone.status)}
                         </p>
                       </div>
-                      <StatusBadge label={prettyStatus(milestone.status)} />
+                      <StatusBadge label={formatMilestoneStatusLabel(milestone.status)} />
                     </div>
                     <div className="mt-3 grid grid-cols-1 gap-2 text-xs text-zinc-600 dark:text-zinc-400 sm:grid-cols-2">
                       <p>Due: {milestone.dueAt ? formatDateTime(milestone.dueAt) : "No due date"}</p>
@@ -212,9 +246,19 @@ export default function ProjectDetailShellPage() {
                         Milestone actions are frozen while a dispute is active.
                       </div>
                     ) : null}
-                    {isAssignedFreelancer ? (
+                    {!contractPauseLoading && !contractPaused && isAssignedFreelancer ? (
                       <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:justify-end">
-                        {canSubmitMilestone(project.status, milestone.status, milestone.openDisputeId) ? (
+                        {canSubmitMilestone({
+                          projectStatus: project.status,
+                          milestoneStatus: milestone.status,
+                          milestoneOpenDisputeId: milestone.openDisputeId,
+                          currentSortOrder: milestone.sortOrder,
+                          milestones: project.milestones.map((m) => ({
+                            sortOrder: m.sortOrder,
+                            status: m.status,
+                          })),
+                          isProjectParty: true,
+                        }).allowed ? (
                           <Button
                             type="button"
                             size="sm"
@@ -229,41 +273,145 @@ export default function ProjectDetailShellPage() {
                           </Button>
                         ) : (
                           <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                            Submission is unavailable while disputed or until this milestone is
-                            funded and in progress.
+                            {guardReasonMessage(
+                              canSubmitMilestone({
+                                projectStatus: project.status,
+                                milestoneStatus: milestone.status,
+                                milestoneOpenDisputeId: milestone.openDisputeId,
+                                currentSortOrder: milestone.sortOrder,
+                                milestones: project.milestones.map((m) => ({
+                                  sortOrder: m.sortOrder,
+                                  status: m.status,
+                                })),
+                                isProjectParty: true,
+                              }).reason,
+                            ) ?? "Submission is currently unavailable."}
                           </p>
                         )}
                       </div>
                     ) : null}
-                    {isProjectClient &&
+                    {!contractPauseLoading && !contractPaused &&
+                      isProjectClient &&
                       project.latestSubmission &&
                       project.latestSubmission.milestoneId === milestone.id &&
-                      canClientApprovePayout(project, milestone.status, milestone.openDisputeId) ? (
+                      project.chainId &&
+                      project.onChainProjectId &&
+                      project.escrowContractAddress ? (
                       <MilestoneApprovalPanel
                         projectId={project.id}
                         milestoneId={milestone.id}
                         milestoneIndex={milestone.sortOrder}
                         submissionId={project.latestSubmission.id}
                         chainId={project.chainId!}
+                        projectStatus={project.status}
+                        milestoneStatus={milestone.status}
+                        milestoneOpenDisputeId={milestone.openDisputeId}
+                        milestones={project.milestones.map((m) => ({
+                          sortOrder: m.sortOrder,
+                          status: m.status,
+                        }))}
                         onChainProjectId={project.onChainProjectId!}
                         escrowContractAddress={project.escrowContractAddress as `0x${string}`}
                         releasedAmountWei={milestone.amountWei}
                       />
                     ) : null}
-                    {canRaiseDispute({
+                    {!contractPauseLoading && !contractPaused &&
+                      isProjectClient &&
+                      project.openDispute &&
+                      project.openDispute.milestoneId === milestone.id &&
+                      project.chainId &&
+                      project.escrowContractAddress &&
+                      project.onChainProjectId ? (
+                      <ResolveStaleDisputeByTimeoutPanel
+                        projectId={project.id}
+                        chainId={project.chainId}
+                        escrowContractAddress={
+                          project.escrowContractAddress as `0x${string}`
+                        }
+                        onChainProjectId={project.onChainProjectId}
+                        milestoneIndex={milestone.sortOrder}
+                        milestoneStatus={milestone.status}
+                        disputeStatus={project.openDispute.status}
+                        disputeCreatedAt={project.openDispute.createdAt}
+                        clientWalletAddress={project.client.walletAddress}
+                      />
+                    ) : null}
+                    {!contractPauseLoading && !contractPaused &&
+                    project.chainId &&
+                    project.escrowContractAddress &&
+                    project.onChainProjectId &&
+                    canRaiseDispute({
                       projectStatus: project.status,
                       milestoneStatus: milestone.status,
                       milestoneOpenDisputeId: milestone.openDisputeId,
-                      isParticipant: isProjectClient || isAssignedFreelancer,
-                    }) ? (
+                      isProjectParty: isProjectClient || isAssignedFreelancer,
+                    }).allowed ? (
                       <DisputeCreatePanel
                         projectId={project.id}
                         milestoneId={milestone.id}
+                        chainId={project.chainId!}
+                        escrowContractAddress={project.escrowContractAddress as `0x${string}`}
+                        onChainProjectId={project.onChainProjectId!}
+                        milestoneIndex={milestone.sortOrder}
+                        milestoneDueAt={milestone.dueAt}
+                        milestoneStatus={milestone.status}
+                        projectStatus={project.status}
+                        milestoneOpenDisputeId={milestone.openDisputeId}
+                        milestones={project.milestones.map((m) => ({
+                          sortOrder: m.sortOrder,
+                          status: m.status,
+                        }))}
+                        clientWalletAddress={project.client.walletAddress}
+                        freelancerWalletAddress={project.freelancer?.walletAddress ?? null}
                         relatedSubmissionId={
                           project.latestSubmission?.milestoneId === milestone.id
                             ? project.latestSubmission.id
                             : null
                         }
+                      />
+                    ) : null}
+                    {!contractPauseLoading && !contractPaused &&
+                    project.chainId &&
+                    project.escrowContractAddress &&
+                    project.onChainProjectId ? (
+                      <>
+                        <AlternativeRecipientPanel
+                          projectId={project.id}
+                          milestoneDbId={milestone.id}
+                          chainId={project.chainId}
+                          escrowContractAddress={project.escrowContractAddress}
+                          onChainProjectId={project.onChainProjectId}
+                          milestoneIndex={milestone.sortOrder}
+                          isFreelancerSide
+                          partyWalletAddress={project.freelancer?.walletAddress ?? null}
+                          title="Freelancer recipient controls"
+                        />
+                        <AlternativeRecipientPanel
+                          projectId={project.id}
+                          milestoneDbId={milestone.id}
+                          chainId={project.chainId}
+                          escrowContractAddress={project.escrowContractAddress}
+                          onChainProjectId={project.onChainProjectId}
+                          milestoneIndex={milestone.sortOrder}
+                          isFreelancerSide={false}
+                          partyWalletAddress={project.client.walletAddress}
+                          title="Client recipient controls"
+                        />
+                      </>
+                    ) : null}
+                    {!contractPauseLoading && !contractPaused &&
+                    milestone.openDisputeId &&
+                    project.chainId &&
+                    project.escrowContractAddress &&
+                    project.onChainProjectId ? (
+                      <DisputeEvidenceAppendPanel
+                        projectId={project.id}
+                        chainId={project.chainId}
+                        escrowContractAddress={project.escrowContractAddress as `0x${string}`}
+                        onChainProjectId={project.onChainProjectId}
+                        milestoneIndex={milestone.sortOrder}
+                        clientWalletAddress={project.client.walletAddress}
+                        freelancerWalletAddress={project.freelancer?.walletAddress ?? null}
                       />
                     ) : null}
                   </div>
@@ -556,54 +704,6 @@ function toGatewayUrl(uri: string): string {
   }
   const value = uri.replace("ipfs://", "");
   return `https://gateway.pinata.cloud/ipfs/${value}`;
-}
-
-function canSubmitMilestone(
-  projectStatus: string,
-  milestoneStatus: string,
-  openDisputeId: string | null,
-): boolean {
-  if (isMilestoneFrozen(projectStatus, openDisputeId)) {
-    return false;
-  }
-  return ["FUNDED", "IN_PROGRESS", "REJECTED"].includes(milestoneStatus);
-}
-
-function canClientApprovePayout(
-  project: {
-    status?: string;
-    chainId: number | null;
-    onChainProjectId: string | null;
-    escrowContractAddress: string | null;
-  },
-  milestoneStatus: string,
-  openDisputeId: string | null,
-): boolean {
-  if (isMilestoneFrozen(project.status ?? "ACTIVE", openDisputeId)) {
-    return false;
-  }
-  if (!project.chainId || !project.onChainProjectId || !project.escrowContractAddress) {
-    return false;
-  }
-  return ["SUBMITTED", "CLIENT_REVIEW", "APPROVED"].includes(milestoneStatus);
-}
-
-function canRaiseDispute(input: {
-  projectStatus: string;
-  milestoneStatus: string;
-  milestoneOpenDisputeId: string | null;
-  isParticipant: boolean;
-}): boolean {
-  if (!input.isParticipant) {
-    return false;
-  }
-  if (input.milestoneOpenDisputeId) {
-    return false;
-  }
-  if (!["ACTIVE", "DISPUTED"].includes(input.projectStatus)) {
-    return false;
-  }
-  return ["SUBMITTED", "APPROVED"].includes(input.milestoneStatus);
 }
 
 function isMilestoneFrozen(projectStatus: string, openDisputeId: string | null): boolean {

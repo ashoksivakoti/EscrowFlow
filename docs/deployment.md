@@ -33,6 +33,7 @@ Validate before build:
 
 ```bash
 pnpm web:validate:env
+pnpm web:sanity:contract
 ```
 
 ## 3) Database migration flow (production)
@@ -58,7 +59,7 @@ From root:
 
 ```bash
 pnpm contracts:test
-pnpm contracts:deploy:stack -- --network arbitrumSepolia
+pnpm contracts:deploy:canonical:registry -- --network arbitrumSepolia
 ```
 
 Artifact is written to:
@@ -70,7 +71,7 @@ Use that artifact to feed app config:
 - `CONTRACTS_DEPLOYMENT_PATH`
 - `CONTRACTS_DEFAULT_CHAIN_ID`
 - `CONTRACTS_ESCROW_REGISTRY_ADDRESS`
-- `CONTRACTS_PAYMENT_TOKEN_ADDRESS`
+- `CONTRACTS_PAYMENT_TOKEN_ADDRESS` (set explicitly in env for your selected payment token)
 
 Optional UX-prefill vars for the create-project form:
 
@@ -148,6 +149,11 @@ This is suitable for:
 3. `pnpm --filter @escrowflow/web test`
 4. `pnpm contracts:test`
 5. `pnpm web:validate:env`
-6. `pnpm db:migrate:deploy`
-7. deploy web app
-8. configure scheduler for `pnpm event-sync:trigger`
+6. `pnpm web:sanity:contract`
+7. `pnpm db:migrate:deploy`
+8. deploy web app
+9. configure scheduler for `pnpm event-sync:trigger`
+
+CI gate before release:
+
+- Run `pnpm ci:release:web` (env validation + canonical contract sanity + web build).

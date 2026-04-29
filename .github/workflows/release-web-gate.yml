@@ -1,0 +1,43 @@
+name: Release Web Gate
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  release-web-gate:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      NEXT_PUBLIC_CHAIN_IDS: "421614"
+      NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID: ${{ secrets.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID }}
+      AUTH_SECRET: ${{ secrets.AUTH_SECRET }}
+      AUTH_SIWE_DOMAIN: ${{ secrets.AUTH_SIWE_DOMAIN }}
+      AUTH_SIWE_URI: ${{ secrets.AUTH_SIWE_URI }}
+      AUTH_ALLOWED_CHAIN_IDS: "421614"
+      EVENT_SYNC_RPC_URL: ${{ secrets.EVENT_SYNC_RPC_URL }}
+      EVENT_SYNC_CHAIN_ID: "421614"
+      EVENT_SYNC_CONTRACT_ADDRESS: "0xe5AF7E2CF6435de6B0a0520518FCaaab851BB40c"
+      EVENT_SYNC_SCOPE: "ESCROW_REGISTRY:0xe5af7e2cf6435de6b0a0520518fcaaab851bb40c"
+      EVENT_SYNC_START_BLOCK: ${{ secrets.EVENT_SYNC_START_BLOCK }}
+      EVENT_SYNC_TRIGGER_TOKEN: ${{ secrets.EVENT_SYNC_TRIGGER_TOKEN }}
+      CONTRACTS_PAYMENT_TOKEN_ADDRESS: ${{ secrets.CONTRACTS_PAYMENT_TOKEN_ADDRESS }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate env + contract sanity + web build
+        run: pnpm ci:release:web

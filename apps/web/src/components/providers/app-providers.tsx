@@ -15,6 +15,8 @@ import { WagmiProvider } from "wagmi";
 import type { Chain } from "wagmi/chains";
 import { arbitrumSepolia, baseSepolia, hardhat, mainnet, sepolia } from "wagmi/chains";
 
+import { ContractPauseProvider } from "@/components/providers/contract-pause-provider";
+
 const CHAIN_MAP: Record<number, Chain> = {
   1: mainnet,
   11155111: sepolia,
@@ -68,7 +70,9 @@ export function AppProviders({ children }: { children: ReactNode }) {
   return (
     <WagmiProvider config={wagmiConfig}>
       <QueryClientProvider client={queryClient}>
-        <RainbowKitProvider theme={rkTheme}>{children}</RainbowKitProvider>
+        <RainbowKitProvider theme={rkTheme}>
+          <ContractPauseProvider>{children}</ContractPauseProvider>
+        </RainbowKitProvider>
       </QueryClientProvider>
     </WagmiProvider>
   );

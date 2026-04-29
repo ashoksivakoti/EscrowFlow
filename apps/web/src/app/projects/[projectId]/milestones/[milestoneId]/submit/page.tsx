@@ -23,6 +23,13 @@ import { useMeQuery } from "@/hooks/use-me-query";
 import { useProjectDetailQuery } from "@/hooks/use-project-detail-query";
 import { useSessionQuery } from "@/hooks/use-session-query";
 import { needsOnboarding } from "@/lib/auth/client-guards";
+import { formatEscrowRegistryWriteError } from "@/lib/contracts/decode-error";
+import { useContractPaused } from "@/components/providers/contract-pause-provider";
+import {
+  canSubmitMilestone,
+  formatMilestoneStatusLabel,
+  guardReasonMessage,
+} from "@/lib/contracts/status-mapping";
 import { writeSubmitMilestoneTx } from "@/lib/contracts/write-submit-milestone";
 
 const ON_CHAIN_URI_MAX_BYTES = 2048;
@@ -58,6 +65,8 @@ export default function MilestoneSubmissionPage() {
 
   const loading = sessionLoading || (meEnabled && meLoading && !meFetched) || projectLoading;
 
+  const { paused: contractPaused } = useContractPaused();
+
   useEffect(() => {
     if (sessionLoading) {
       return;
@@ -92,6 +101,20 @@ export default function MilestoneSubmissionPage() {
     project.chainId != null &&
     activeChainId !== project.chainId,
   );
+  const submitGuard =
+    project && milestone
+      ? canSubmitMilestone({
+          projectStatus: project.status,
+          milestoneStatus: milestone.status,
+          milestoneOpenDisputeId: milestone.openDisputeId,
+          currentSortOrder: milestone.sortOrder,
+          milestones: project.milestones.map((m) => ({
+            sortOrder: m.sortOrder,
+            status: m.status,
+          })),
+          isProjectParty: isFreelancerOwner,
+        })
+      : { allowed: false, reason: null };
 
   async function confirmSubmitMilestoneOnChain(
     response: CreateSubmissionResponse,
@@ -136,6 +159,10 @@ export default function MilestoneSubmissionPage() {
     if (!projectId || !milestoneId || !project || !milestone) {
       return;
     }
+    if (contractPaused) {
+      setErrorMessage("Contract is paused. Milestone submission is disabled.");
+      return;
+    }
     setErrorMessage(null);
     setSuccessResponse(null);
     setPendingChainAfterApi(null);
@@ -148,8 +175,11 @@ export default function MilestoneSubmissionPage() {
       setErrorMessage("Only the assigned freelancer can submit work for this milestone.");
       return;
     }
-    if (!canSubmitMilestone(milestone.status)) {
-      setErrorMessage("This milestone is not currently open for submissions.");
+    if (!submitGuard.allowed) {
+      setErrorMessage(
+        guardReasonMessage(submitGuard.reason) ??
+          "This milestone is not currently open for submissions.",
+      );
       return;
     }
 
@@ -193,11 +223,11 @@ export default function MilestoneSubmissionPage() {
         setPendingChainAfterApi(apiResponse);
         setErrorMessage(
           error instanceof Error
-            ? `${error.message} Your submission is saved in the app; use “Retry on-chain submit” after fixing the issue (e.g. network, funding, or wallet chain).`
+            ? `${formatEscrowRegistryWriteError(error, error.message)} Your submission is saved in the app; use “Retry on-chain submit” after fixing the issue (e.g. network, funding, or wallet chain).`
             : "On-chain registration failed. Your submission is saved in the app; you can retry below.",
         );
       } else {
-        setErrorMessage(error instanceof Error ? error.message : "Submission failed");
+        setErrorMessage(formatEscrowRegistryWriteError(error, "Submission failed"));
       }
       setUploadProgressPct(0);
     } finally {
@@ -222,7 +252,7 @@ export default function MilestoneSubmissionPage() {
       setUploadProgressPct(100);
       await queryClient.invalidateQueries({ queryKey: ["project", projectId] });
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "On-chain submit failed");
+      setErrorMessage(formatEscrowRegistryWriteError(error, "On-chain submit failed"));
     } finally {
       setSubmitting(false);
       setSubmitPhase("upload");
@@ -245,7 +275,7 @@ export default function MilestoneSubmissionPage() {
             <CardHeader>
               <CardTitle className="break-words text-lg sm:text-xl">{milestone.title}</CardTitle>
               <CardDescription>
-                Project: {project.title} · Status: {prettyStatus(milestone.status)}
+                Project: {project.title} · Status: {formatMilestoneStatusLabel(milestone.status)}
               </CardDescription>
             </CardHeader>
             <div className="space-y-3 px-4 pb-6 sm:px-6">
@@ -282,6 +312,18 @@ export default function MilestoneSubmissionPage() {
                   >
                     Switch network
                   </Button>
+                </div>
+              ) : null}
+
+              {!submitGuard.allowed && submitGuard.reason ? (
+                <div className="rounded-xl border border-amber-300/35 bg-amber-300/10 px-3 py-2 text-xs text-amber-100">
+                  {guardReasonMessage(submitGuard.reason)}
+                </div>
+              ) : null}
+
+              {contractPaused ? (
+                <div className="rounded-xl border border-amber-300/35 bg-amber-300/10 px-3 py-2 text-xs text-amber-100">
+                  Contract is paused. Submissions are disabled until unpaused.
                 </div>
               ) : null}
 
@@ -392,7 +434,13 @@ export default function MilestoneSubmissionPage() {
                 <Button
                   type="button"
                   className="w-full sm:w-auto"
-                  disabled={submitting || Boolean(pendingChainAfterApi) || chainMismatch}
+                  disabled={
+                    submitting ||
+                    Boolean(pendingChainAfterApi) ||
+                    chainMismatch ||
+                    contractPaused ||
+                    !submitGuard.allowed
+                  }
                   onClick={() => void onSubmit()}
                 >
                   {submitting ? "Submitting…" : "Submit milestone work"}
@@ -464,10 +512,6 @@ function projectHasEscrowBinding(project: ProjectDetail): boolean {
   return Boolean(
     project.onChainProjectId && project.escrowContractAddress && project.chainId != null,
   );
-}
-
-function canSubmitMilestone(status: string): boolean {
-  return ["FUNDED", "IN_PROGRESS", "REJECTED"].includes(status);
 }
 
 function prettyStatus(status: string): string {

@@ -11,7 +11,8 @@ import {
   useWalletClient,
 } from "wagmi";
 
-import { escrowRegistryAbi } from "@/lib/contracts/escrow-registry-abi";
+import { escrowRegistryAbi } from "@/lib/contracts/escrow-registry-abi.full";
+import { formatEscrowRegistryWriteError } from "@/lib/contracts/decode-error";
 import { estimateCappedWriteGas } from "@/lib/contracts/safe-write-gas";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -44,6 +45,7 @@ type OnChainFundingState = {
   totalWei: bigint;
   allowanceWei: bigint;
   balanceWei: bigint;
+  projectStatusCode: number;
 };
 
 function clampPositiveDecimal(input: string): string {
@@ -134,6 +136,7 @@ export function ProjectFundingPanel(props: FundingPanelProps) {
         fundedWei,
         allowanceWei: BigInt(allowance),
         balanceWei: BigInt(balance),
+        projectStatusCode: Number(projectTuple.status),
       });
       setOnChainReadError(null);
     } catch (error) {
@@ -221,6 +224,12 @@ export function ProjectFundingPanel(props: FundingPanelProps) {
       setErrorMessage("Your token balance is lower than this funding amount.");
       return;
     }
+    // Contract enum: 0 = Active, 1 = Disputed, 2 = Completed, 3 = Cancelled.
+    if (onChain.projectStatusCode !== 0) {
+      const mapped = ["Active", "Disputed", "Completed", "Cancelled"][onChain.projectStatusCode];
+      setErrorMessage(`Funding is only allowed while project is Active (current: ${mapped ?? "Unknown"}).`);
+      return;
+    }
 
     try {
       const account = walletClient.account.address;
@@ -303,9 +312,7 @@ export function ProjectFundingPanel(props: FundingPanelProps) {
       await refreshOnChainState();
     } catch (error) {
       setPhase("failure");
-      setErrorMessage(
-        error instanceof Error ? error.message : "Funding transaction failed",
-      );
+      setErrorMessage(formatEscrowRegistryWriteError(error, "Funding transaction failed"));
     }
   }
 
@@ -419,6 +426,17 @@ export function ProjectFundingPanel(props: FundingPanelProps) {
                       : 0n,
                     onChain.decimals,
                   )} tokens`
+                : onChainReadError
+                  ? "—"
+                  : "Loading…"
+            }
+          />
+          <InfoMetric
+            label="Contract status"
+            value={
+              onChain
+                ? (["Active", "Disputed", "Completed", "Cancelled"][onChain.projectStatusCode] ??
+                  `Unknown (${onChain.projectStatusCode})`)
                 : onChainReadError
                   ? "—"
                   : "Loading…"

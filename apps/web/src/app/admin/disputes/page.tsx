@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { useChainId, usePublicClient, useSwitchChain, useWalletClient } from "wagmi";
+import { getAddress } from "viem";
+import { useAccount, useChainId, usePublicClient, useSwitchChain, useWalletClient } from "wagmi";
 
 import type { AdminDisputeDetail } from "@escrowflow/types";
 
@@ -16,8 +17,18 @@ import { FieldError } from "@/components/ui/field-error";
 import { useAdminDisputesQuery } from "@/hooks/use-admin-disputes-query";
 import { useMeQuery } from "@/hooks/use-me-query";
 import { useSessionQuery } from "@/hooks/use-session-query";
-import { escrowRegistryAbi } from "@/lib/contracts/escrow-registry-abi";
+import { escrowRegistryAbi } from "@/lib/contracts/escrow-registry-abi.full";
+import { formatEscrowRegistryWriteError } from "@/lib/contracts/decode-error";
+import { canonicalDeployment } from "@/lib/contracts/contract-addresses";
+import { useContractRoles, type ContractRoleFlags } from "@/lib/contracts/roles";
 import { getExplorerTxUrl } from "@/lib/chains/explorer";
+import { PauseOpsPanel } from "@/components/admin/pause-ops-panel";
+import {
+  canResolveStaleDispute,
+  formatMilestoneStatusLabel,
+  formatProjectStatusLabel,
+  guardReasonMessage,
+} from "@/lib/contracts/status-mapping";
 
 type ResolutionKind = "PAYOUT_TO_FREELANCER" | "REFUND_TO_CLIENT" | "SPLIT";
 
@@ -26,6 +37,8 @@ type Phase =
   | "signing"
   | "pending"
   | "syncing"
+  | "emergency_signing"
+  | "emergency_pending"
   | "success"
   | "failure";
 
@@ -35,6 +48,11 @@ export default function AdminDisputesPage() {
   const meEnabled = Boolean(session?.authenticated);
   const { data: me, isPending: meLoading } = useMeQuery(meEnabled);
   const canLoad = Boolean(me?.roles.includes("ADMIN"));
+  const { address } = useAccount();
+  const contractRoles = useContractRoles({
+    chainId: canonicalDeployment.chainId,
+    contractAddress: canonicalDeployment.contracts.EscrowFlowRegistry,
+  });
 
   const [statusFilter, setStatusFilter] = useState<"open" | "resolved" | "all">("open");
   const { data: disputes, isPending: disputesLoading } = useAdminDisputesQuery(canLoad, {
@@ -124,11 +142,47 @@ export default function AdminDisputesPage() {
         <AdminMetric label="Resolution mode" value="On-chain + sync" hint="Contract + API reconciliation" />
       </section>
 
+      {address ? (
+        <Card className="mt-5">
+          <CardHeader>
+            <CardTitle className="text-lg">On-chain role checks</CardTitle>
+            <CardDescription>
+              App ADMIN access is not enough for contract writes. Wallet must hold required on-chain roles.
+            </CardDescription>
+          </CardHeader>
+          <div className="space-y-2 px-4 pb-4 text-xs sm:px-6 sm:pb-6">
+            <p>Wallet: {address}</p>
+            <p>DEFAULT_ADMIN_ROLE: {contractRoles.isContractAdmin ? "yes" : "no"}</p>
+            <p>PAUSER_ROLE: {contractRoles.isPauser ? "yes" : "no"}</p>
+            <p>ARBITRATOR_ROLE: {contractRoles.isArbitrator ? "yes" : "no"}</p>
+            {contractRoles.isLoading ? <p>Checking contract roles…</p> : null}
+            {contractRoles.error ? <FieldError message={contractRoles.error} /> : null}
+            {contractRoles.warnings.map((warning) => (
+              <FieldError key={warning} message={warning} />
+            ))}
+            {contractRoles.isContractAdmin ? (
+              <p className="text-zinc-300">Contract admin controls: visible</p>
+            ) : null}
+            {contractRoles.isPauser ? (
+              <p className="text-zinc-300">Pause controls: visible</p>
+            ) : null}
+          </div>
+        </Card>
+      ) : null}
+
+      <div className="mt-5">{contractRoles.isPauser ? <PauseOpsPanel /> : null}</div>
+
       <div className="mt-5 space-y-4">
         {disputesLoading ? (
           <AdminDisputesListSkeleton />
         ) : disputes && disputes.length > 0 ? (
-          disputes.map((dispute) => <DisputeCard key={dispute.id} dispute={dispute} />)
+          disputes.map((dispute) => (
+            <DisputeCard
+              key={dispute.id}
+              dispute={dispute}
+              contractRoles={contractRoles}
+            />
+          ))
         ) : (
           <Card>
             <CardHeader>
@@ -192,7 +246,13 @@ function AdminDisputesListSkeleton() {
   );
 }
 
-function DisputeCard({ dispute }: { dispute: AdminDisputeDetail }) {
+function DisputeCard({
+  dispute,
+  contractRoles,
+}: {
+  dispute: AdminDisputeDetail;
+  contractRoles: ContractRoleFlags;
+}) {
   const queryClient = useQueryClient();
   const activeChainId = useChainId();
   const { switchChainAsync } = useSwitchChain();
@@ -207,9 +267,16 @@ function DisputeCard({ dispute }: { dispute: AdminDisputeDetail }) {
   const [freelancerAmountWei, setFreelancerAmountWei] = useState(dispute.milestone.amountWei);
   const [clientAmountWei, setClientAmountWei] = useState("0");
   const [resolutionNote, setResolutionNote] = useState("");
+  const [altRecipientInput, setAltRecipientInput] = useState("");
+  const [altRecipientForFreelancer, setAltRecipientForFreelancer] = useState(true);
   const [phase, setPhase] = useState<Phase>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [emergencyReadyAt, setEmergencyReadyAt] = useState<bigint | null>(null);
+  const [nowUnixSeconds, setNowUnixSeconds] = useState<number>(() =>
+    Math.floor(Date.now() / 1000),
+  );
+  const [isContractPaused, setIsContractPaused] = useState(false);
 
   const canResolve = ["OPEN", "AWAITING_RESPONSE", "UNDER_ADMIN_REVIEW"].includes(dispute.status);
   const hasOnchainContext = Boolean(
@@ -232,6 +299,110 @@ function DisputeCard({ dispute }: { dispute: AdminDisputeDetail }) {
       }),
     [kind, dispute.milestone.amountWei, freelancerAmountWei, clientAmountWei],
   );
+  const staleDisputeGuard = canResolveStaleDispute({
+    projectStatus: dispute.project.status,
+    milestoneStatus: dispute.milestone.status,
+    milestoneOpenDisputeId: canResolve ? dispute.id : null,
+  });
+  const resolutionArgs = useMemo(
+    () =>
+      [
+        BigInt(dispute.project.onChainProjectId ?? "0"),
+        BigInt(dispute.milestone.sortOrder),
+        kindToContractCode(kind),
+        BigInt(freelancerAmountWei || "0"),
+        BigInt(clientAmountWei || "0"),
+      ] as const,
+    [
+      clientAmountWei,
+      dispute.milestone.sortOrder,
+      dispute.project.onChainProjectId,
+      freelancerAmountWei,
+      kind,
+    ],
+  );
+  const emergencyReadyAtDate = emergencyReadyAt
+    ? new Date(Number(emergencyReadyAt) * 1000)
+    : null;
+  const emergencySecondsRemaining = emergencyReadyAt
+    ? Math.max(0, Number(emergencyReadyAt) - nowUnixSeconds)
+    : 0;
+  const hasEmergencyProposal = Boolean(emergencyReadyAt && emergencyReadyAt > 0n);
+  const canExecuteEmergency = Boolean(hasEmergencyProposal && emergencySecondsRemaining === 0);
+  const canCancelEmergency = Boolean(hasEmergencyProposal && emergencySecondsRemaining > 0);
+  const canShowEmergencyControls = hasOnchainContext && contractRoles.isContractAdmin;
+
+  useEffect(() => {
+    if (!canShowEmergencyControls || !publicClient || !dispute.project.onChainProjectId) {
+      setEmergencyReadyAt(null);
+      return;
+    }
+    const pc = publicClient;
+    let active = true;
+    async function refreshEmergencyReadyAt(): Promise<void> {
+      try {
+        const readyAt = await pc.readContract({
+          address: dispute.project.escrowContractAddress as `0x${string}`,
+          abi: escrowRegistryAbi,
+          functionName: "getEmergencyResolutionReadyAt",
+          args: resolutionArgs,
+        });
+        if (active) {
+          setEmergencyReadyAt(typeof readyAt === "bigint" ? readyAt : 0n);
+        }
+      } catch {
+        if (active) {
+          setEmergencyReadyAt(0n);
+        }
+      }
+    }
+    void refreshEmergencyReadyAt();
+    const timer = setInterval(() => {
+      setNowUnixSeconds(Math.floor(Date.now() / 1000));
+      void refreshEmergencyReadyAt();
+    }, 1000);
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, [
+    canShowEmergencyControls,
+    dispute.project.escrowContractAddress,
+    dispute.project.onChainProjectId,
+    publicClient,
+    resolutionArgs,
+  ]);
+
+  useEffect(() => {
+    if (!hasOnchainContext || !publicClient || !dispute.project.escrowContractAddress) {
+      setIsContractPaused(false);
+      return;
+    }
+    const pc = publicClient;
+    let active = true;
+    async function readPaused(): Promise<void> {
+      try {
+        const paused = await pc.readContract({
+          address: dispute.project.escrowContractAddress as `0x${string}`,
+          abi: escrowRegistryAbi,
+          functionName: "paused",
+        });
+        if (active) {
+          setIsContractPaused(Boolean(paused));
+        }
+      } catch {
+        if (active) {
+          setIsContractPaused(false);
+        }
+      }
+    }
+    void readPaused();
+    const timer = setInterval(() => void readPaused(), 5000);
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, [dispute.project.escrowContractAddress, hasOnchainContext, publicClient]);
 
   async function submitResolution(): Promise<void> {
     setErrorMessage(null);
@@ -242,6 +413,16 @@ function DisputeCard({ dispute }: { dispute: AdminDisputeDetail }) {
     }
     if (!canResolve) {
       setErrorMessage("This dispute is already resolved.");
+      return;
+    }
+    if (!staleDisputeGuard.allowed) {
+      setErrorMessage(
+        guardReasonMessage(staleDisputeGuard.reason) ?? "Dispute is not eligible for resolution.",
+      );
+      return;
+    }
+    if (hasOnchainContext && !contractRoles.isArbitrator) {
+      setErrorMessage("On-chain dispute resolution requires ARBITRATOR_ROLE.");
       return;
     }
 
@@ -301,11 +482,183 @@ function DisputeCard({ dispute }: { dispute: AdminDisputeDetail }) {
       await queryClient.invalidateQueries({ queryKey: ["admin-disputes"] });
       await queryClient.invalidateQueries({ queryKey: ["project", dispute.project.id] });
       await queryClient.invalidateQueries({ queryKey: ["projects"] });
+      setEmergencyReadyAt(null);
       setPhase("success");
       setSuccessMessage("Dispute resolved and synced successfully.");
     } catch (error) {
       setPhase("failure");
-      setErrorMessage(error instanceof Error ? error.message : "Resolution failed");
+      setErrorMessage(formatEscrowRegistryWriteError(error, "Resolution failed"));
+    }
+  }
+
+  async function proposeEmergencyResolution(): Promise<void> {
+    setErrorMessage(null);
+    setSuccessMessage(null);
+    if (!canShowEmergencyControls) {
+      setErrorMessage("Emergency proposal requires DEFAULT_ADMIN_ROLE.");
+      return;
+    }
+    if (!walletClient || !publicClient || !hasOnchainContext) {
+      setErrorMessage("Wallet client not ready for emergency action.");
+      return;
+    }
+    if (chainMismatch) {
+      setErrorMessage(`Switch your wallet to chain ${dispute.project.chainId} first.`);
+      return;
+    }
+    if (validationError) {
+      setErrorMessage(validationError);
+      return;
+    }
+    try {
+      setPhase("emergency_signing");
+      const txHash = await walletClient.writeContract({
+        address: dispute.project.escrowContractAddress as `0x${string}`,
+        abi: escrowRegistryAbi,
+        functionName: "proposeEmergencyResolveDispute",
+        args: resolutionArgs,
+        chain: walletClient.chain,
+        account: walletClient.account,
+      });
+      setPhase("emergency_pending");
+      await publicClient.waitForTransactionReceipt({ hash: txHash });
+      await queryClient.invalidateQueries({ queryKey: ["admin-disputes"] });
+      setSuccessMessage("Emergency dispute resolution proposed. Timelock countdown started.");
+    } catch (error) {
+      setPhase("failure");
+      setErrorMessage(formatEscrowRegistryWriteError(error, "Could not propose emergency resolution."));
+    }
+  }
+
+  async function executeEmergencyResolution(): Promise<void> {
+    setErrorMessage(null);
+    setSuccessMessage(null);
+    if (!canShowEmergencyControls) {
+      setErrorMessage("Emergency execution requires DEFAULT_ADMIN_ROLE.");
+      return;
+    }
+    if (!walletClient || !publicClient || !hasOnchainContext) {
+      setErrorMessage("Wallet client not ready for emergency action.");
+      return;
+    }
+    if (!canExecuteEmergency) {
+      setErrorMessage("Emergency resolution is not ready for execution yet.");
+      return;
+    }
+    if (chainMismatch) {
+      setErrorMessage(`Switch your wallet to chain ${dispute.project.chainId} first.`);
+      return;
+    }
+    try {
+      setPhase("emergency_signing");
+      const txHash = await walletClient.writeContract({
+        address: dispute.project.escrowContractAddress as `0x${string}`,
+        abi: escrowRegistryAbi,
+        functionName: "emergencyResolveDispute",
+        args: resolutionArgs,
+        chain: walletClient.chain,
+        account: walletClient.account,
+      });
+      setPhase("emergency_pending");
+      await publicClient.waitForTransactionReceipt({ hash: txHash });
+      await queryClient.invalidateQueries({ queryKey: ["admin-disputes"] });
+      await queryClient.invalidateQueries({ queryKey: ["project", dispute.project.id] });
+      await queryClient.invalidateQueries({ queryKey: ["projects"] });
+      setEmergencyReadyAt(null);
+      setSuccessMessage("Emergency resolution executed on-chain.");
+    } catch (error) {
+      setPhase("failure");
+      setErrorMessage(formatEscrowRegistryWriteError(error, "Could not execute emergency resolution."));
+    }
+  }
+
+  async function cancelEmergencyResolution(): Promise<void> {
+    setErrorMessage(null);
+    setSuccessMessage(null);
+    if (!canShowEmergencyControls) {
+      setErrorMessage("Emergency cancellation requires DEFAULT_ADMIN_ROLE.");
+      return;
+    }
+    if (!walletClient || !publicClient || !hasOnchainContext) {
+      setErrorMessage("Wallet client not ready for emergency action.");
+      return;
+    }
+    if (!canCancelEmergency) {
+      setErrorMessage("No cancellable emergency proposal is active.");
+      return;
+    }
+    if (chainMismatch) {
+      setErrorMessage(`Switch your wallet to chain ${dispute.project.chainId} first.`);
+      return;
+    }
+    try {
+      setPhase("emergency_signing");
+      const txHash = await walletClient.writeContract({
+        address: dispute.project.escrowContractAddress as `0x${string}`,
+        abi: escrowRegistryAbi,
+        functionName: "cancelEmergencyResolveDispute",
+        args: resolutionArgs,
+        chain: walletClient.chain,
+        account: walletClient.account,
+      });
+      setPhase("emergency_pending");
+      await publicClient.waitForTransactionReceipt({ hash: txHash });
+      await queryClient.invalidateQueries({ queryKey: ["admin-disputes"] });
+      setEmergencyReadyAt(null);
+      setSuccessMessage("Emergency resolution proposal cancelled.");
+    } catch (error) {
+      setPhase("failure");
+      setErrorMessage(formatEscrowRegistryWriteError(error, "Could not cancel emergency resolution."));
+    }
+  }
+
+  async function setAlternativeRecipient(): Promise<void> {
+    setErrorMessage(null);
+    setSuccessMessage(null);
+    if (!hasOnchainContext || !walletClient || !publicClient) {
+      setErrorMessage("On-chain context is required.");
+      return;
+    }
+    if (!contractRoles.isArbitrator) {
+      setErrorMessage("setAlternativeRecipient requires ARBITRATOR_ROLE.");
+      return;
+    }
+    if (isContractPaused) {
+      setErrorMessage("Alternative recipient actions are hidden while contract is paused.");
+      return;
+    }
+    if (!/^0x[a-fA-F0-9]{40}$/.test(altRecipientInput)) {
+      setErrorMessage("Enter a valid alternative recipient address.");
+      return;
+    }
+    if (chainMismatch) {
+      setErrorMessage(`Switch your wallet to chain ${dispute.project.chainId} first.`);
+      return;
+    }
+    try {
+      setPhase("signing");
+      const txHash = await walletClient.writeContract({
+        address: dispute.project.escrowContractAddress as `0x${string}`,
+        abi: escrowRegistryAbi,
+        functionName: "setAlternativeRecipient",
+        args: [
+          BigInt(dispute.project.onChainProjectId!),
+          BigInt(dispute.milestone.sortOrder),
+          altRecipientForFreelancer,
+          getAddress(altRecipientInput),
+        ],
+        chain: walletClient.chain,
+        account: walletClient.account,
+      });
+      setPhase("pending");
+      await publicClient.waitForTransactionReceipt({ hash: txHash });
+      await queryClient.invalidateQueries({ queryKey: ["admin-disputes"] });
+      setSuccessMessage(
+        "Alternative recipient set. Pending recipient must be executed by party after delay.",
+      );
+    } catch (e) {
+      setPhase("failure");
+      setErrorMessage(formatEscrowRegistryWriteError(e, "Could not set alternative recipient."));
     }
   }
 
@@ -328,8 +681,8 @@ function DisputeCard({ dispute }: { dispute: AdminDisputeDetail }) {
           </p>
           <p className="text-sm text-zinc-200">{dispute.description}</p>
           <p className="text-xs text-zinc-400">
-            Project status: {prettyStatus(dispute.project.status)} · Milestone status:{" "}
-            {prettyStatus(dispute.milestone.status)}
+            Project status: {formatProjectStatusLabel(dispute.project.status)} · Milestone status:{" "}
+            {formatMilestoneStatusLabel(dispute.milestone.status)}
           </p>
           <p className="text-xs text-zinc-400">
             Client: {truncateWallet(dispute.participants.client.walletAddress)}
@@ -474,6 +827,8 @@ function DisputeCard({ dispute }: { dispute: AdminDisputeDetail }) {
           {hasOnchainContext ? (
             <div className="mt-3 rounded-lg border border-zinc-800/90 bg-zinc-950/80 px-3 py-2 text-xs text-zinc-300">
               <p>On-chain resolution enabled.</p>
+              <p>Requires ARBITRATOR_ROLE: {contractRoles.isArbitrator ? "yes" : "no"}</p>
+              <p>Contract paused: {isContractPaused ? "yes" : "no"}</p>
               <p>Chain: {dispute.project.chainId}</p>
               {chainMismatch ? (
                 <Button
@@ -498,29 +853,164 @@ function DisputeCard({ dispute }: { dispute: AdminDisputeDetail }) {
             </div>
           )}
 
+          {hasOnchainContext && contractRoles.isArbitrator && !isContractPaused ? (
+            <div className="mt-3 rounded-xl border border-zinc-800/90 bg-zinc-950/80 p-3 text-xs text-zinc-300">
+              <p className="font-medium text-zinc-100">Arbitrator alternative recipient</p>
+              <p className="mt-1">
+                Pending alternative recipients are not active until executed by the relevant party.
+              </p>
+              <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={altRecipientForFreelancer ? "primary" : "secondary"}
+                  className="w-full sm:w-auto"
+                  onClick={() => setAltRecipientForFreelancer(true)}
+                >
+                  Freelancer side
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={!altRecipientForFreelancer ? "primary" : "secondary"}
+                  className="w-full sm:w-auto"
+                  onClick={() => setAltRecipientForFreelancer(false)}
+                >
+                  Client side
+                </Button>
+              </div>
+              <Input
+                className="mt-2"
+                placeholder="Alternative recipient (0x...)"
+                value={altRecipientInput}
+                onChange={(e) => setAltRecipientInput(e.target.value)}
+              />
+              <Button
+                type="button"
+                size="sm"
+                className="mt-2 w-full sm:w-auto"
+                disabled={phase === "signing" || phase === "pending"}
+                onClick={() => void setAlternativeRecipient()}
+              >
+                Set alternative recipient
+              </Button>
+            </div>
+          ) : null}
+          {hasOnchainContext && contractRoles.isArbitrator && isContractPaused ? (
+            <FieldError
+              message="Arbitrator recipient actions hidden while contract is paused."
+              className="mt-2 text-xs"
+            />
+          ) : null}
+
           {validationError ? <FieldError message={validationError} className="mt-2 text-xs" /> : null}
+          {!staleDisputeGuard.allowed ? (
+            <FieldError
+              message={guardReasonMessage(staleDisputeGuard.reason) ?? undefined}
+              className="mt-2 text-xs"
+            />
+          ) : null}
           {errorMessage ? <FieldError message={errorMessage} className="mt-2 text-xs" /> : null}
           {successMessage ? (
             <p className="mt-2 text-xs text-emerald-700 dark:text-emerald-300">{successMessage}</p>
           ) : null}
 
-          <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:justify-end">
-            <Button
-              type="button"
-              size="sm"
-              className="w-full sm:w-auto"
-              disabled={Boolean(validationError) || phase === "signing" || phase === "pending" || phase === "syncing"}
-              onClick={() => void submitResolution()}
-            >
-              {phase === "signing"
-                ? "Waiting signature..."
-                : phase === "pending"
-                  ? "Waiting confirmation..."
-                  : phase === "syncing"
-                    ? "Persisting..."
-                    : "Resolve dispute"}
-            </Button>
-          </div>
+          {hasOnchainContext ? (
+            <div className="mt-3 rounded-xl border border-zinc-800/90 bg-zinc-950/80 p-3 text-xs text-zinc-300">
+              <p className="font-medium text-zinc-100">Emergency resolution (timelocked)</p>
+              <p className="mt-1">
+                Requires DEFAULT_ADMIN_ROLE: {contractRoles.isContractAdmin ? "yes" : "no"}
+              </p>
+              {hasEmergencyProposal && emergencyReadyAtDate ? (
+                <>
+                  <p className="mt-1">Ready at: {emergencyReadyAtDate.toLocaleString()}</p>
+                  <p className="mt-1">
+                    Countdown:{" "}
+                    {emergencySecondsRemaining > 0
+                      ? `${emergencySecondsRemaining}s`
+                      : "Ready to execute"}
+                  </p>
+                </>
+              ) : (
+                <p className="mt-1">No active emergency proposal for current resolution inputs.</p>
+              )}
+              {!contractRoles.isContractAdmin ? (
+                <FieldError
+                  message="Emergency controls hidden: connect wallet with DEFAULT_ADMIN_ROLE."
+                  className="mt-2 text-xs"
+                />
+              ) : (
+                <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                  {!hasEmergencyProposal ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      className="w-full sm:w-auto"
+                      disabled={phase === "emergency_signing" || phase === "emergency_pending"}
+                      onClick={() => void proposeEmergencyResolution()}
+                    >
+                      Propose emergency resolve
+                    </Button>
+                  ) : null}
+                  {canExecuteEmergency ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="w-full sm:w-auto"
+                      disabled={phase === "emergency_signing" || phase === "emergency_pending"}
+                      onClick={() => void executeEmergencyResolution()}
+                    >
+                      Execute emergency resolve
+                    </Button>
+                  ) : null}
+                  {canCancelEmergency ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      className="w-full sm:w-auto"
+                      disabled={phase === "emergency_signing" || phase === "emergency_pending"}
+                      onClick={() => void cancelEmergencyResolution()}
+                    >
+                      Cancel emergency proposal
+                    </Button>
+                  ) : null}
+                </div>
+              )}
+            </div>
+          ) : null}
+
+          {hasOnchainContext && !contractRoles.isArbitrator ? (
+            <FieldError
+              message="On-chain resolve action hidden: connect a wallet with ARBITRATOR_ROLE."
+              className="mt-2 text-xs"
+            />
+          ) : (
+            <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:justify-end">
+              <Button
+                type="button"
+                size="sm"
+                className="w-full sm:w-auto"
+                disabled={
+                  Boolean(validationError) ||
+                  !staleDisputeGuard.allowed ||
+                  phase === "signing" ||
+                  phase === "pending" ||
+                  phase === "syncing"
+                }
+                onClick={() => void submitResolution()}
+              >
+                {phase === "signing"
+                  ? "Waiting signature..."
+                  : phase === "pending"
+                    ? "Waiting confirmation..."
+                    : phase === "syncing"
+                      ? "Persisting..."
+                      : "Resolve dispute"}
+              </Button>
+            </div>
+          )}
         </div>
       ) : (
         <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">

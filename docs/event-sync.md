@@ -30,13 +30,21 @@ Server-side environment variables (`apps/web/.env.local`):
 - `EVENT_SYNC_RPC_URL`
 - `EVENT_SYNC_CHAIN_ID`
 - `EVENT_SYNC_CONTRACT_ADDRESS`
-- `EVENT_SYNC_SCOPE` (optional)
-- `EVENT_SYNC_START_BLOCK` (optional)
+- `EVENT_SYNC_SCOPE` (recommended as `ESCROW_REGISTRY:<lowercase_registry_address>`)
+- `EVENT_SYNC_START_BLOCK` (**required in production**, must be a positive integer and set to canonical deployment block)
 - `EVENT_SYNC_BATCH_SIZE` (optional)
 - `EVENT_SYNC_CONFIRMATIONS` (optional)
 - `EVENT_SYNC_RPC_RETRIES` (optional; default `2`)
 - `EVENT_SYNC_RPC_RETRY_DELAY_MS` (optional; default `800`)
 - `EVENT_SYNC_TRIGGER_TOKEN` (optional; recommended for production)
+
+Canonical production values:
+
+- `EVENT_SYNC_CHAIN_ID=421614`
+- `EVENT_SYNC_CONTRACT_ADDRESS=0xe5AF7E2CF6435de6B0a0520518FCaaab851BB40c`
+- `EVENT_SYNC_SCOPE=ESCROW_REGISTRY:0xe5af7e2cf6435de6b0a0520518fcaaab851bb40c`
+
+The deprecated registry address (`0x268993a0E0342972a52C58aa2dD1A9953fd57aCf`) is blocked from event-sync runtime and env validation.
 
 ## Processing model
 

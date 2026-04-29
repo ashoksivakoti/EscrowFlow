@@ -4,8 +4,14 @@ import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useChainId, usePublicClient, useSwitchChain, useWalletClient } from "wagmi";
 
-import { escrowRegistryAbi } from "@/lib/contracts/escrow-registry-abi";
+import { escrowRegistryAbi } from "@/lib/contracts/escrow-registry-abi.full";
+import { formatEscrowRegistryWriteError } from "@/lib/contracts/decode-error";
 import { estimateCappedWriteGas } from "@/lib/contracts/safe-write-gas";
+import {
+  canApproveMilestone,
+  canReleaseMilestone,
+  guardReasonMessage,
+} from "@/lib/contracts/status-mapping";
 import { Button } from "@/components/ui/button";
 import { FieldError } from "@/components/ui/field-error";
 import { Textarea } from "@/components/ui/textarea";
@@ -26,6 +32,10 @@ export function MilestoneApprovalPanel(props: {
   milestoneIndex: number;
   submissionId: string;
   chainId: number;
+  projectStatus: string;
+  milestoneStatus: string;
+  milestoneOpenDisputeId: string | null;
+  milestones: Array<{ sortOrder: number; status: string }>;
   onChainProjectId: string;
   escrowContractAddress: `0x${string}`;
   releasedAmountWei: string;
@@ -42,6 +52,26 @@ export function MilestoneApprovalPanel(props: {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const chainMismatch = activeChainId !== props.chainId;
+  const approveGuard = canApproveMilestone({
+    projectStatus: props.projectStatus,
+    milestoneStatus: props.milestoneStatus,
+    milestoneOpenDisputeId: props.milestoneOpenDisputeId,
+    currentSortOrder: props.milestoneIndex,
+    milestones: props.milestones,
+    isProjectParty: true,
+  });
+  const releaseGuard = canReleaseMilestone({
+    projectStatus: props.projectStatus,
+    milestoneStatus: props.milestoneStatus,
+    milestoneOpenDisputeId: props.milestoneOpenDisputeId,
+    currentSortOrder: props.milestoneIndex,
+    milestones: props.milestones,
+    isProjectParty: true,
+  });
+  const actionBlockedReason =
+    approveGuard.allowed || releaseGuard.allowed
+      ? null
+      : approveGuard.reason ?? releaseGuard.reason;
   const isBusy =
     phase === "approve_signing" ||
     phase === "approve_pending" ||
@@ -57,6 +87,12 @@ export function MilestoneApprovalPanel(props: {
     }
     if (!walletClient || !publicClient) {
       setErrorMessage("Wallet client not ready. Reconnect wallet and try again.");
+      return;
+    }
+    if (actionBlockedReason) {
+      setErrorMessage(
+        guardReasonMessage(actionBlockedReason) ?? "Milestone is not ready for approval/release.",
+      );
       return;
     }
 
@@ -141,7 +177,7 @@ export function MilestoneApprovalPanel(props: {
       setReviewNote("");
     } catch (error) {
       setPhase("failure");
-      setErrorMessage(error instanceof Error ? error.message : "Approval/payout failed");
+      setErrorMessage(formatEscrowRegistryWriteError(error, "Approval/payout failed"));
     }
   }
 
@@ -207,6 +243,12 @@ export function MilestoneApprovalPanel(props: {
         </div>
       ) : null}
 
+      {actionBlockedReason ? (
+        <div className="mt-3 rounded-xl border border-amber-300/35 bg-amber-300/10 px-3 py-2 text-xs text-amber-100">
+          {guardReasonMessage(actionBlockedReason)}
+        </div>
+      ) : null}
+
       {statusMessage ? (
         <div
           className={`mt-3 rounded-xl border px-3 py-2 text-xs ${
@@ -227,7 +269,7 @@ export function MilestoneApprovalPanel(props: {
           type="button"
           size="sm"
           className="w-full sm:w-auto"
-          disabled={isBusy}
+          disabled={isBusy || Boolean(actionBlockedReason)}
           onClick={() => void approveAndPayout()}
         >
           {isBusy ? "Processing…" : "Approve and release payout"}

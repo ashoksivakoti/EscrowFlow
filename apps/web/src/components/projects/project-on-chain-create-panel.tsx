@@ -18,7 +18,8 @@ import {
   readJsonOrEmpty,
   type ApiErrorJson,
 } from "@/lib/api/client-error";
-import { escrowRegistryAbi } from "@/lib/contracts/escrow-registry-abi";
+import { escrowRegistryAbi } from "@/lib/contracts/escrow-registry-abi.full";
+import { formatEscrowRegistryWriteError } from "@/lib/contracts/decode-error";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { FieldError } from "@/components/ui/field-error";
@@ -178,7 +179,7 @@ export function ProjectOnChainCreatePanel({ project }: Props) {
         setErrorMessage(error.message);
         return;
       }
-      setErrorMessage(error instanceof Error ? error.message : "Transaction failed.");
+      setErrorMessage(formatEscrowRegistryWriteError(error, "Transaction failed."));
     }
   }
 

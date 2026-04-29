@@ -1,6 +1,6 @@
 # Deployments
 
-JSON artifacts written here by Hardhat scripts (`deploy-mock-token`, `deploy-registry`, `deploy-stack`).
+JSON artifacts written here by the canonical Hardhat deploy script (`deploy-canonical-registry`).
 
 - Filenames: `<network>-<chainId>.json` (for example `sepolia-11155111.json`).
 - `*.json` is gitignored; keep addresses in your secrets manager or paste into `apps/web/.env.local`.

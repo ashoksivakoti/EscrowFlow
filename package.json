@@ -22,12 +22,16 @@
     "db:seed:public-marketplace": "node prisma/scripts/seed-public-marketplace-for-wallet.mjs",
     "db:link-project-on-chain": "node prisma/scripts/link-project-on-chain-fields.mjs",
     "web:validate:env": "pnpm --filter @escrowflow/web validate:env",
+    "web:sanity:contract": "pnpm --filter @escrowflow/web sanity:contract",
+    "ci:release:web": "pnpm web:validate:env && pnpm web:sanity:contract && pnpm --filter @escrowflow/web build",
     "event-sync:trigger": "pnpm --filter @escrowflow/web event-sync:trigger",
     "contracts:compile": "pnpm --filter @escrowflow/contracts compile",
     "contracts:test": "pnpm --filter @escrowflow/contracts test",
-    "contracts:deploy:stack": "pnpm --filter @escrowflow/contracts deploy:stack",
-    "contracts:deploy:registry": "pnpm --filter @escrowflow/contracts deploy:registry",
-    "contracts:deploy:mock-token": "pnpm --filter @escrowflow/contracts deploy:mock-token"
+    "contracts:deploy:canonical:registry": "pnpm --filter @escrowflow/contracts deploy:canonical:registry",
+    "contracts:setup:canonical:registry": "pnpm --filter @escrowflow/contracts setup:canonical:registry",
+    "contracts:sanity:canonical:registry": "pnpm --filter @escrowflow/contracts sanity:canonical:registry",
+    "contracts:verify:canonical:registry": "pnpm --filter @escrowflow/contracts verify:canonical:registry",
+    "contracts:cutover:registry:refs": "pnpm --filter @escrowflow/contracts cutover:registry:refs"
   },
   "devDependencies": {
     "@eslint/js": "^9.18.0",

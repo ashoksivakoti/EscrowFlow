@@ -1,6 +1,6 @@
 import type { Address, PublicClient, WalletClient } from "viem";
 
-import { escrowRegistryAbi } from "@/lib/contracts/escrow-registry-abi";
+import { escrowRegistryAbi } from "@/lib/contracts/escrow-registry-abi.full";
 import { estimateCappedWriteGas } from "@/lib/contracts/safe-write-gas";
 
 export async function writeSubmitMilestoneTx(input: {

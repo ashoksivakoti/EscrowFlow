@@ -13,6 +13,10 @@ import {
   readJsonOrEmpty,
   type ApiErrorJson,
 } from "@/lib/api/client-error";
+import {
+  getEscrowRegistryAddressFromEnv,
+  getChainIdFromEnv,
+} from "@/lib/contracts/contract-addresses";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { FieldError } from "@/components/ui/field-error";
@@ -67,9 +71,10 @@ const emptyMilestone: FormValues["milestones"][number] = {
   dueAtLocal: "",
 };
 
-const DEFAULT_CHAIN_ID = process.env.NEXT_PUBLIC_DEFAULT_CHAIN_ID?.trim() ?? "";
-const DEFAULT_ESCROW_ADDRESS =
-  process.env.NEXT_PUBLIC_DEFAULT_ESCROW_REGISTRY_ADDRESS?.trim() ?? "";
+const DEFAULT_CHAIN_ID = String(getChainIdFromEnv(process.env.NEXT_PUBLIC_DEFAULT_CHAIN_ID));
+const DEFAULT_ESCROW_ADDRESS = getEscrowRegistryAddressFromEnv(
+  process.env.NEXT_PUBLIC_DEFAULT_ESCROW_REGISTRY_ADDRESS,
+);
 const DEFAULT_TOKEN_ADDRESS =
   process.env.NEXT_PUBLIC_DEFAULT_PAYMENT_TOKEN_ADDRESS?.trim() ?? "";
 

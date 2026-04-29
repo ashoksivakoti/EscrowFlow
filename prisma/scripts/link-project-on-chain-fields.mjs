@@ -11,7 +11,7 @@
  *
  * Chain / contract defaults (first non-empty wins):
  *   env CONTRACTS_DEFAULT_CHAIN_ID, CONTRACTS_ESCROW_REGISTRY_ADDRESS, CONTRACTS_PAYMENT_TOKEN_ADDRESS
- *   or `packages/contracts/deployments/hardhat-31337.json` (override path with CONTRACTS_DEPLOYMENT_PATH)
+ *   or `packages/contracts/deployments/arbitrumSepolia-421614.json` (override path with CONTRACTS_DEPLOYMENT_PATH)
  *
  * Loads `.env`, `.env.local` (repo root), then `apps/web/.env.local` when present (same pattern as other prisma scripts).
  */
@@ -76,13 +76,12 @@ function readDeploymentArtifact(relPath) {
 
 function resolveContractDefaults() {
   const explicitPath = process.env.CONTRACTS_DEPLOYMENT_PATH?.trim();
-  const rel = explicitPath || "packages/contracts/deployments/hardhat-31337.json";
+  const rel = explicitPath || "packages/contracts/deployments/arbitrumSepolia-421614.json";
   const artifact = readDeploymentArtifact(rel);
   const chainId = Number(process.env.CONTRACTS_DEFAULT_CHAIN_ID || artifact?.chainId);
   const escrow =
     (process.env.CONTRACTS_ESCROW_REGISTRY_ADDRESS || artifact?.contracts?.EscrowFlowRegistry || "").trim();
-  const token =
-    (process.env.CONTRACTS_PAYMENT_TOKEN_ADDRESS || artifact?.contracts?.MockERC20Stablecoin || "").trim();
+  const token = (process.env.CONTRACTS_PAYMENT_TOKEN_ADDRESS || "").trim();
 
   if (!Number.isFinite(chainId) || chainId <= 0) {
     throw new Error("Could not resolve chainId (set CONTRACTS_DEFAULT_CHAIN_ID or use a deployment JSON with chainId).");
@@ -91,7 +90,7 @@ function resolveContractDefaults() {
     throw new Error("Could not resolve escrow registry address (set CONTRACTS_ESCROW_REGISTRY_ADDRESS or deployment artifact).");
   }
   if (!isEvmAddress(token)) {
-    throw new Error("Could not resolve payment token address (set CONTRACTS_PAYMENT_TOKEN_ADDRESS or deployment artifact).");
+    throw new Error("Could not resolve payment token address (set CONTRACTS_PAYMENT_TOKEN_ADDRESS).");
   }
 
   return {

@@ -5,13 +5,17 @@
   "scripts": {
     "compile": "hardhat compile",
     "test": "hardhat test",
-    "deploy:mock-token": "hardhat run scripts/deploy-mock-token.ts",
-    "deploy:registry": "hardhat run scripts/deploy-registry.ts",
-    "deploy:stack": "hardhat run scripts/deploy-stack.ts",
-    "mint:mock": "hardhat run scripts/mint-mock-to.ts",
+    "deploy:canonical:registry": "hardhat run scripts/deploy-canonical-registry.ts",
     "sweep:untracked": "hardhat run scripts/sweep-untracked-token.ts",
+    "setup:canonical:registry": "hardhat run scripts/setup-canonical-registry.ts",
+    "sanity:canonical:registry": "hardhat run scripts/sanity-check-canonical-registry.ts",
+    "verify:canonical:registry": "hardhat run scripts/verify-canonical-registry.ts",
+    "cutover:registry:refs": "node scripts/cutover-registry-references.mjs",
+    "report:canonical:deployment": "node scripts/report-canonical-deployment.mjs",
     "lint": "node -e \"console.log('Solidity linting not configured yet (add solhint when needed).')\"",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "measure:bytecode-runs": "node scripts/measure-registry-bytecode-runs.mjs",
+    "test:strict": "hardhat test"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox": "^5.0.0",

@@ -5,6 +5,12 @@ import path from "path";
 
 dotenv.config({ path: path.join(__dirname, ".env") });
 
+/** Optimizer runs for deployment size vs runtime gas tradeoff (override via CONTRACTS_OPTIMIZER_RUNS). */
+const OPTIMIZER_RUNS = Number.parseInt(
+  process.env.CONTRACTS_OPTIMIZER_RUNS ?? "1",
+  10,
+);
+
 function deployerPrivateKeys(): string[] {
   const raw = process.env.DEPLOYER_PRIVATE_KEY?.trim();
   if (!raw) {
@@ -17,7 +23,10 @@ const config: HardhatUserConfig = {
   solidity: {
     version: "0.8.28",
     settings: {
-      optimizer: { enabled: true, runs: 200 },
+      // Low runs + IR + stripped metadata minimize deployed runtime bytecode (EIP-170).
+      optimizer: { enabled: true, runs: OPTIMIZER_RUNS },
+      viaIR: true,
+      metadata: { bytecodeHash: "none" },
     },
   },
   networks: {
@@ -46,6 +55,10 @@ const config: HardhatUserConfig = {
     tests: "./test",
     cache: "./cache",
     artifacts: "./artifacts",
+  },
+  mocha: {
+    forbidOnly: true,
+    forbidPending: true,
   },
 };
 

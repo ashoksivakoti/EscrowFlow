@@ -34,6 +34,7 @@ export async function createMilestoneDisputeForParticipant(input: {
   ensureMilestoneState(context.milestone.status);
   ensureNoOpenDispute(context.openDisputeExists);
   ensureRelatedSubmission(context.submissionExists, input.payload.relatedSubmissionId ?? null);
+  ensureOnChainLinkage(context, input.payload);
 
   const evidenceFiles = await uploadEvidenceFilesToIpfs(input.payload.files);
   const openedByRole = resolveSubmittedByRole(
@@ -84,23 +85,26 @@ export async function createMilestoneDisputeForParticipant(input: {
 
       await tx.transactionLog.create({
         data: {
-          chainId: context.project.chainId ?? 0,
+          chainId: input.payload.chainId,
           blockNumber: 0n,
-          txHash: `offchain-dispute-${dispute.id}`,
+          txHash: input.payload.disputeTxHash,
           logIndex: -1,
           eventName: "DisputeRaised",
           projectId: context.project.id,
           milestoneId: context.milestone.id,
           initiatedByUserId: input.openedByUserId,
           fromAddress: context.openedBy.walletAddress.toLowerCase(),
-          toAddress: context.project.escrowContractAddress?.toLowerCase() ?? null,
+          toAddress: input.payload.escrowContractAddress,
           payload: {
             disputeId: dispute.id,
             reason: input.payload.reason,
+            reasonUri: input.payload.reasonUri,
             evidenceIpfsUri: evidenceMetadata.uri,
             evidenceFiles,
             relatedSubmissionId: input.payload.relatedSubmissionId ?? null,
-            source: "participant_dispute",
+            onChainProjectId: input.payload.onChainProjectId,
+            milestoneIndex: input.payload.milestoneIndex,
+            source: "onchain_participant_dispute_reconcile",
           },
         },
       });
@@ -136,6 +140,7 @@ async function loadDisputeContext(projectId: string, milestoneId: string, opened
           status: true,
           chainId: true,
           escrowContractAddress: true,
+          onChainProjectId: true,
           clientUserId: true,
           freelancerUserId: true,
         },
@@ -224,6 +229,47 @@ function ensureRelatedSubmission(submissionIds: Set<string>, relatedSubmissionId
     throw new AppError(
       "RELATED_SUBMISSION_NOT_FOUND",
       "Related submission does not belong to this milestone",
+      400,
+    );
+  }
+}
+
+function ensureOnChainLinkage(
+  context: Awaited<ReturnType<typeof loadDisputeContext>>,
+  payload: CreateMilestoneDisputeBody,
+): void {
+  if (
+    !context.project.chainId ||
+    !context.project.escrowContractAddress ||
+    !context.project.onChainProjectId
+  ) {
+    throw new AppError(
+      "PROJECT_ONCHAIN_LINKAGE_REQUIRED",
+      "Project must be linked on-chain before dispute reconciliation.",
+      409,
+    );
+  }
+  if (payload.chainId !== context.project.chainId) {
+    throw new AppError("CHAIN_ID_MISMATCH", "Dispute chain does not match project chain", 400);
+  }
+  if (payload.escrowContractAddress !== context.project.escrowContractAddress.toLowerCase()) {
+    throw new AppError(
+      "ESCROW_CONTRACT_MISMATCH",
+      "Dispute escrow contract does not match project escrow contract",
+      400,
+    );
+  }
+  if (payload.onChainProjectId !== context.project.onChainProjectId) {
+    throw new AppError(
+      "ONCHAIN_PROJECT_ID_MISMATCH",
+      "Dispute on-chain project id does not match project record",
+      400,
+    );
+  }
+  if (payload.milestoneIndex !== context.milestone.sortOrder) {
+    throw new AppError(
+      "MILESTONE_INDEX_MISMATCH",
+      "Dispute milestone index does not match milestone sort order",
       400,
     );
   }

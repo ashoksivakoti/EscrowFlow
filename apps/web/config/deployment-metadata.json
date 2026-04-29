@@ -1,0 +1,13 @@
+{
+  "chainId": 421614,
+  "network": "arbitrumSepolia",
+  "contracts": {
+    "EscrowFlowRegistry": "0xe5AF7E2CF6435de6B0a0520518FCaaab851BB40c"
+  },
+  "deploymentBlock": 263614332,
+  "abi": {
+    "source": "packages/contracts/artifacts/contracts/EscrowFlowRegistry.sol/EscrowFlowRegistry.json",
+    "version": "latest",
+    "hash": null
+  }
+}

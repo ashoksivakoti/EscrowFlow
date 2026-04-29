@@ -58,6 +58,12 @@ describe("handleCreateMilestoneDispute", () => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         reason: "Delivery did not match acceptance criteria",
+        reasonUri: "escrowflow://disputes/reason/0xabc",
+        chainId: 421614,
+        escrowContractAddress: "0xe5af7e2cf6435de6b0a0520518fcaaab851bb40c",
+        onChainProjectId: "42",
+        milestoneIndex: 1,
+        disputeTxHash: `0x${"1".repeat(64)}`,
         files: [{ fileName: "evidence.pdf", mimeType: "application/pdf", fileBase64: "SGVsbG8=" }],
         relatedSubmissionId: "submission_1",
       }),
@@ -92,6 +98,12 @@ describe("handleCreateMilestoneDispute", () => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         reason: "short",
+        reasonUri: "escrowflow://disputes/reason/0xabc",
+        chainId: 421614,
+        escrowContractAddress: "0xe5af7e2cf6435de6b0a0520518fcaaab851bb40c",
+        onChainProjectId: "42",
+        milestoneIndex: 1,
+        disputeTxHash: `0x${"1".repeat(64)}`,
         files: [],
       }),
     });
@@ -109,6 +121,12 @@ describe("handleCreateMilestoneDispute", () => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         reason: "Delivery did not match acceptance criteria",
+        reasonUri: "escrowflow://disputes/reason/0xabc",
+        chainId: 421614,
+        escrowContractAddress: "0xe5af7e2cf6435de6b0a0520518fcaaab851bb40c",
+        onChainProjectId: "42",
+        milestoneIndex: 1,
+        disputeTxHash: `0x${"1".repeat(64)}`,
         files: [{ fileName: "evidence.pdf", mimeType: "application/pdf", fileBase64: "SGVsbG8=" }],
       }),
     });
