@@ -1,4 +1,9 @@
-import { MilestoneStatus, ProjectStatus, SubmissionStatus } from "@prisma/client";
+import {
+  MilestoneStatus,
+  ProjectStatus,
+  SubmissionStatus,
+  TransactionLogSourceType,
+} from "@prisma/client";
 
 import type { ApproveAndPayoutBody } from "@/server/validation/schemas/milestone-review";
 import { prisma, prismaInteractiveTransactionOptions } from "@/lib/prisma";
@@ -76,6 +81,7 @@ export async function reconcileMilestoneApprovalAndPayout(input: {
           },
         },
         update: {
+          sourceType: TransactionLogSourceType.synthetic_client_reconcile,
           payload: {
             projectId: input.projectId,
             milestoneId: input.milestoneId,
@@ -90,6 +96,7 @@ export async function reconcileMilestoneApprovalAndPayout(input: {
           txHash: input.payload.approveTxHash.toLowerCase(),
           logIndex: -1,
           eventName: "MilestoneApproved",
+          sourceType: TransactionLogSourceType.synthetic_client_reconcile,
           projectId: input.projectId,
           milestoneId: input.milestoneId,
           initiatedByUserId: input.clientUserId,
@@ -116,6 +123,7 @@ export async function reconcileMilestoneApprovalAndPayout(input: {
           },
         },
         update: {
+          sourceType: TransactionLogSourceType.synthetic_client_reconcile,
           payload: {
             projectId: input.projectId,
             milestoneId: input.milestoneId,
@@ -130,6 +138,7 @@ export async function reconcileMilestoneApprovalAndPayout(input: {
           txHash: input.payload.releaseTxHash.toLowerCase(),
           logIndex: -1,
           eventName: "MilestoneFundsReleased",
+          sourceType: TransactionLogSourceType.synthetic_client_reconcile,
           projectId: input.projectId,
           milestoneId: input.milestoneId,
           initiatedByUserId: input.clientUserId,
@@ -207,6 +216,7 @@ async function sumProjectReleasedAmount(projectId: string): Promise<string> {
     where: {
       projectId,
       eventName: { in: ["MilestoneFundsReleased", "DisputeResolved"] },
+      sourceType: TransactionLogSourceType.chain_event,
     },
     select: { payload: true },
   });

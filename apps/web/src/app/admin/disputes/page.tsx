@@ -20,9 +20,17 @@ import { useSessionQuery } from "@/hooks/use-session-query";
 import { escrowRegistryAbi } from "@/lib/contracts/escrow-registry-abi.full";
 import { formatEscrowRegistryWriteError } from "@/lib/contracts/decode-error";
 import { canonicalDeployment } from "@/lib/contracts/contract-addresses";
-import { useContractRoles, type ContractRoleFlags } from "@/lib/contracts/roles";
+import {
+  ARBITRATOR_ROLE,
+  DEFAULT_ADMIN_ROLE,
+  readHasRole,
+  useContractRoles,
+  type ContractRoleFlags,
+} from "@/lib/contracts/roles";
 import { getExplorerTxUrl } from "@/lib/chains/explorer";
 import { PauseOpsPanel } from "@/components/admin/pause-ops-panel";
+import { SyncStatusNotice } from "@/components/sync/sync-status-notice";
+import { useSyncReconciliation } from "@/hooks/use-sync-reconciliation";
 import {
   canResolveStaleDispute,
   formatMilestoneStatusLabel,
@@ -277,6 +285,7 @@ function DisputeCard({
     Math.floor(Date.now() / 1000),
   );
   const [isContractPaused, setIsContractPaused] = useState(false);
+  const syncTracker = useSyncReconciliation(true);
 
   const canResolve = ["OPEN", "AWAITING_RESPONSE", "UNDER_ADMIN_REVIEW"].includes(dispute.status);
   const hasOnchainContext = Boolean(
@@ -331,6 +340,7 @@ function DisputeCard({
   const canExecuteEmergency = Boolean(hasEmergencyProposal && emergencySecondsRemaining === 0);
   const canCancelEmergency = Boolean(hasEmergencyProposal && emergencySecondsRemaining > 0);
   const canShowEmergencyControls = hasOnchainContext && contractRoles.isContractAdmin;
+  const normalizedEmergencyProposal = dispute.emergencyResolutionProposal;
 
   useEffect(() => {
     if (!canShowEmergencyControls || !publicClient || !dispute.project.onChainProjectId) {
@@ -435,6 +445,43 @@ function DisputeCard({
         if (chainMismatch) {
           throw new Error(`Switch your wallet to chain ${dispute.project.chainId} first.`);
         }
+        const [paused, hasArbitratorRole, projectTuple, milestoneTuple, disputeTuple] = await Promise.all([
+          publicClient.readContract({
+            address: dispute.project.escrowContractAddress as `0x${string}`,
+            abi: escrowRegistryAbi,
+            functionName: "paused",
+          }),
+          readHasRole({
+            publicClient,
+            contractAddress: dispute.project.escrowContractAddress as `0x${string}`,
+            role: ARBITRATOR_ROLE,
+            account: walletClient.account.address,
+          }),
+          publicClient.readContract({
+            address: dispute.project.escrowContractAddress as `0x${string}`,
+            abi: escrowRegistryAbi,
+            functionName: "getProject",
+            args: [BigInt(dispute.project.onChainProjectId!)],
+          }),
+          publicClient.readContract({
+            address: dispute.project.escrowContractAddress as `0x${string}`,
+            abi: escrowRegistryAbi,
+            functionName: "getMilestone",
+            args: [BigInt(dispute.project.onChainProjectId!), BigInt(dispute.milestone.sortOrder)],
+          }),
+          publicClient.readContract({
+            address: dispute.project.escrowContractAddress as `0x${string}`,
+            abi: escrowRegistryAbi,
+            functionName: "getDispute",
+            args: [BigInt(dispute.project.onChainProjectId!), BigInt(dispute.milestone.sortOrder)],
+          }),
+        ]);
+        if (Boolean(paused) || !hasArbitratorRole || Number(projectTuple.status) > 1 || !Boolean(disputeTuple[0])) {
+          throw new Error("On-chain dispute state changed. Refresh disputes and retry resolution.");
+        }
+        if (Number(milestoneTuple.status) > 2) {
+          throw new Error("Milestone is no longer resolvable on-chain. Refresh disputes.");
+        }
 
         setPhase("signing");
         resolutionTxHash = await walletClient.writeContract({
@@ -453,6 +500,8 @@ function DisputeCard({
         });
         setPhase("pending");
         await publicClient.waitForTransactionReceipt({ hash: resolutionTxHash });
+        const resolutionReceipt = await publicClient.getTransactionReceipt({ hash: resolutionTxHash });
+        syncTracker.onTxConfirmed(resolutionReceipt.blockNumber);
       }
 
       setPhase("syncing");
@@ -482,6 +531,7 @@ function DisputeCard({
       await queryClient.invalidateQueries({ queryKey: ["admin-disputes"] });
       await queryClient.invalidateQueries({ queryKey: ["project", dispute.project.id] });
       await queryClient.invalidateQueries({ queryKey: ["projects"] });
+      syncTracker.markUiRefreshed();
       setEmergencyReadyAt(null);
       setPhase("success");
       setSuccessMessage("Dispute resolved and synced successfully.");
@@ -511,6 +561,23 @@ function DisputeCard({
       return;
     }
     try {
+      const [paused, hasAdminRole] = await Promise.all([
+        publicClient.readContract({
+          address: dispute.project.escrowContractAddress as `0x${string}`,
+          abi: escrowRegistryAbi,
+          functionName: "paused",
+        }),
+        readHasRole({
+          publicClient,
+          contractAddress: dispute.project.escrowContractAddress as `0x${string}`,
+          role: DEFAULT_ADMIN_ROLE,
+          account: walletClient.account.address,
+        }),
+      ]);
+      if (Boolean(paused) || !hasAdminRole) {
+        setErrorMessage("On-chain state changed (pause/role). Refresh and retry emergency proposal.");
+        return;
+      }
       setPhase("emergency_signing");
       const txHash = await walletClient.writeContract({
         address: dispute.project.escrowContractAddress as `0x${string}`,
@@ -522,7 +589,10 @@ function DisputeCard({
       });
       setPhase("emergency_pending");
       await publicClient.waitForTransactionReceipt({ hash: txHash });
+      const receipt = await publicClient.getTransactionReceipt({ hash: txHash });
+      syncTracker.onTxConfirmed(receipt.blockNumber);
       await queryClient.invalidateQueries({ queryKey: ["admin-disputes"] });
+      syncTracker.markUiRefreshed();
       setSuccessMessage("Emergency dispute resolution proposed. Timelock countdown started.");
     } catch (error) {
       setPhase("failure");
@@ -550,6 +620,29 @@ function DisputeCard({
       return;
     }
     try {
+      const [paused, hasAdminRole, readyAt] = await Promise.all([
+        publicClient.readContract({
+          address: dispute.project.escrowContractAddress as `0x${string}`,
+          abi: escrowRegistryAbi,
+          functionName: "paused",
+        }),
+        readHasRole({
+          publicClient,
+          contractAddress: dispute.project.escrowContractAddress as `0x${string}`,
+          role: DEFAULT_ADMIN_ROLE,
+          account: walletClient.account.address,
+        }),
+        publicClient.readContract({
+          address: dispute.project.escrowContractAddress as `0x${string}`,
+          abi: escrowRegistryAbi,
+          functionName: "getEmergencyResolutionReadyAt",
+          args: resolutionArgs,
+        }),
+      ]);
+      if (Boolean(paused) || !hasAdminRole || BigInt(readyAt) > BigInt(Math.floor(Date.now() / 1000))) {
+        setErrorMessage("Emergency resolution is not executable on-chain. Refresh and retry.");
+        return;
+      }
       setPhase("emergency_signing");
       const txHash = await walletClient.writeContract({
         address: dispute.project.escrowContractAddress as `0x${string}`,
@@ -561,9 +654,12 @@ function DisputeCard({
       });
       setPhase("emergency_pending");
       await publicClient.waitForTransactionReceipt({ hash: txHash });
+      const receipt = await publicClient.getTransactionReceipt({ hash: txHash });
+      syncTracker.onTxConfirmed(receipt.blockNumber);
       await queryClient.invalidateQueries({ queryKey: ["admin-disputes"] });
       await queryClient.invalidateQueries({ queryKey: ["project", dispute.project.id] });
       await queryClient.invalidateQueries({ queryKey: ["projects"] });
+      syncTracker.markUiRefreshed();
       setEmergencyReadyAt(null);
       setSuccessMessage("Emergency resolution executed on-chain.");
     } catch (error) {
@@ -592,6 +688,23 @@ function DisputeCard({
       return;
     }
     try {
+      const [paused, hasAdminRole] = await Promise.all([
+        publicClient.readContract({
+          address: dispute.project.escrowContractAddress as `0x${string}`,
+          abi: escrowRegistryAbi,
+          functionName: "paused",
+        }),
+        readHasRole({
+          publicClient,
+          contractAddress: dispute.project.escrowContractAddress as `0x${string}`,
+          role: DEFAULT_ADMIN_ROLE,
+          account: walletClient.account.address,
+        }),
+      ]);
+      if (Boolean(paused) || !hasAdminRole) {
+        setErrorMessage("On-chain state changed (pause/role). Refresh and retry cancellation.");
+        return;
+      }
       setPhase("emergency_signing");
       const txHash = await walletClient.writeContract({
         address: dispute.project.escrowContractAddress as `0x${string}`,
@@ -603,7 +716,10 @@ function DisputeCard({
       });
       setPhase("emergency_pending");
       await publicClient.waitForTransactionReceipt({ hash: txHash });
+      const receipt = await publicClient.getTransactionReceipt({ hash: txHash });
+      syncTracker.onTxConfirmed(receipt.blockNumber);
       await queryClient.invalidateQueries({ queryKey: ["admin-disputes"] });
+      syncTracker.markUiRefreshed();
       setEmergencyReadyAt(null);
       setSuccessMessage("Emergency resolution proposal cancelled.");
     } catch (error) {
@@ -652,7 +768,10 @@ function DisputeCard({
       });
       setPhase("pending");
       await publicClient.waitForTransactionReceipt({ hash: txHash });
+      const receipt = await publicClient.getTransactionReceipt({ hash: txHash });
+      syncTracker.onTxConfirmed(receipt.blockNumber);
       await queryClient.invalidateQueries({ queryKey: ["admin-disputes"] });
+      syncTracker.markUiRefreshed();
       setSuccessMessage(
         "Alternative recipient set. Pending recipient must be executed by party after delay.",
       );
@@ -738,6 +857,15 @@ function DisputeCard({
                 className="rounded-lg border border-zinc-800/90 bg-zinc-950/70 p-2 text-xs"
               >
                 <p className="font-medium text-zinc-100">{tx.eventName}</p>
+                <p className="mt-1 text-[11px] uppercase tracking-[0.08em] text-zinc-500">
+                  {tx.sourceType === "chain_event"
+                    ? "Chain event"
+                    : tx.sourceType === "synthetic_client_reconcile"
+                      ? "Synthetic reconcile"
+                      : tx.sourceType === "backend_metadata"
+                        ? "Backend metadata"
+                        : "Unknown source"}
+                </p>
                 <p className="break-all text-zinc-400">{tx.txHash}</p>
                 {getExplorerTxUrl(tx.chainId ?? dispute.project.chainId, tx.txHash) ? (
                   <a
@@ -914,6 +1042,17 @@ function DisputeCard({
           {successMessage ? (
             <p className="mt-2 text-xs text-emerald-700 dark:text-emerald-300">{successMessage}</p>
           ) : null}
+          <div className="mt-2">
+            <SyncStatusNotice
+              stage={syncTracker.stage}
+              syncStatus={syncTracker.syncStatus}
+              syncStatusError={syncTracker.syncStatusError}
+              onRefresh={() => {
+                void queryClient.invalidateQueries({ queryKey: ["admin-disputes"] });
+                void syncTracker.refetchSyncStatus();
+              }}
+            />
+          </div>
 
           {hasOnchainContext ? (
             <div className="mt-3 rounded-xl border border-zinc-800/90 bg-zinc-950/80 p-3 text-xs text-zinc-300">
@@ -921,6 +1060,16 @@ function DisputeCard({
               <p className="mt-1">
                 Requires DEFAULT_ADMIN_ROLE: {contractRoles.isContractAdmin ? "yes" : "no"}
               </p>
+              {normalizedEmergencyProposal ? (
+                <p className="mt-1">
+                  Indexed proposal: {normalizedEmergencyProposal.status}{" "}
+                  {normalizedEmergencyProposal.readyAt
+                    ? `(readyAt ${new Date(normalizedEmergencyProposal.readyAt).toLocaleString()})`
+                    : ""}
+                </p>
+              ) : (
+                <p className="mt-1">Indexed proposal: none</p>
+              )}
               {hasEmergencyProposal && emergencyReadyAtDate ? (
                 <>
                   <p className="mt-1">Ready at: {emergencyReadyAtDate.toLocaleString()}</p>

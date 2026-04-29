@@ -28,7 +28,6 @@ interface IERC1271 {
  *  - settledMilestoneCount <= milestoneCount.
  */
 contract EscrowFlowRegistry is AccessControl {
-
     // -------------------------------------------------------------------------
     // Roles
     // -------------------------------------------------------------------------
@@ -560,7 +559,9 @@ contract EscrowFlowRegistry is AccessControl {
         ) {
             revert MilestoneIndexOutOfRange();
         }
-        address expectedParty = isFreelancer ? project_.freelancer : project_.client;
+        address expectedParty = isFreelancer
+            ? project_.freelancer
+            : project_.client;
         if (originalParty != expectedParty) revert InvalidSignature();
 
         bytes32 structHash = keccak256(
@@ -707,7 +708,7 @@ contract EscrowFlowRegistry is AccessControl {
             PendingAlternativeRecipient
                 memory pending = PendingAlternativeRecipient({
                     recipient: newRecipient,
-                        executableAfter: _toUint64(executableAfter)
+                    executableAfter: _toUint64(executableAfter)
                 });
             if (isFreelancer) {
                 _pendingAlternativeFreelancerRecipient[projectId][
@@ -906,8 +907,7 @@ contract EscrowFlowRegistry is AccessControl {
             Milestone storage milestone_ = _milestones[projectId][i];
             MilestoneStatus s = milestone_.status;
             if (
-                s == MilestoneStatus.Approved ||
-                s == MilestoneStatus.Submitted
+                s == MilestoneStatus.Approved || s == MilestoneStatus.Submitted
             ) {
                 revert CannotCancelApprovedMilestone();
             }
@@ -963,7 +963,9 @@ contract EscrowFlowRegistry is AccessControl {
         uint64 existingReadyAt = _emergencyResolveReadyAt[actionHash];
         if (existingReadyAt != 0)
             revert EmergencyResolutionAlreadyProposed(existingReadyAt);
-        uint64 readyAt = _toUint64(block.timestamp + EMERGENCY_RESOLUTION_DELAY);
+        uint64 readyAt = _toUint64(
+            block.timestamp + EMERGENCY_RESOLUTION_DELAY
+        );
         _emergencyResolveReadyAt[actionHash] = readyAt;
 
         emit EmergencyDisputeResolutionProposed(
@@ -1811,7 +1813,9 @@ contract EscrowFlowRegistry is AccessControl {
                 milestoneIndex
             ] = newRecipient;
         } else {
-            _partyAuthorizedClientRecipient[projectId][milestoneIndex] = newRecipient;
+            _partyAuthorizedClientRecipient[projectId][
+                milestoneIndex
+            ] = newRecipient;
         }
     }
 
@@ -2152,7 +2156,8 @@ contract EscrowFlowRegistry is AccessControl {
         uint256 projectId,
         uint256 milestoneIndex
     ) private {
-        uint256 newNonce = _emergencyResolveNonce[projectId][milestoneIndex] + 1;
+        uint256 newNonce = _emergencyResolveNonce[projectId][milestoneIndex] +
+            1;
         _emergencyResolveNonce[projectId][milestoneIndex] = newNonce;
         emit EmergencyDisputeResolutionNonceAdvanced(
             projectId,
@@ -2164,7 +2169,8 @@ contract EscrowFlowRegistry is AccessControl {
 
     function _erc20CheckedReturn(bytes memory ret) private pure {
         if (ret.length == 0) return;
-        if (ret.length < 32 || !abi.decode(ret, (bool))) revert TokenTransferFailed();
+        if (ret.length < 32 || !abi.decode(ret, (bool)))
+            revert TokenTransferFailed();
     }
 
     function _erc20Call(address token, bytes memory data) private {

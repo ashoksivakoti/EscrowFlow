@@ -1,4 +1,9 @@
-import { DisputeStatus, MilestoneStatus, ProjectStatus } from "@prisma/client";
+import {
+  DisputeStatus,
+  MilestoneStatus,
+  ProjectStatus,
+  TransactionLogSourceType,
+} from "@prisma/client";
 
 import type {
   CreateDisputeResponse,
@@ -90,6 +95,7 @@ export async function createMilestoneDisputeForParticipant(input: {
           txHash: input.payload.disputeTxHash,
           logIndex: -1,
           eventName: "DisputeRaised",
+          sourceType: TransactionLogSourceType.synthetic_client_reconcile,
           projectId: context.project.id,
           milestoneId: context.milestone.id,
           initiatedByUserId: input.openedByUserId,

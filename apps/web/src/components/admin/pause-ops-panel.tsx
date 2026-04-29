@@ -28,7 +28,7 @@ export function PauseOpsPanel() {
     isPauser,
   ]);
 
-  async function onPauseOrUnpause(): Promise<void> {
+  async function onPauseOrUnpause(nextAction: "pause" | "unpause"): Promise<void> {
     setErrorMessage(null);
     setSuccessMessage(null);
 
@@ -46,18 +46,17 @@ export function PauseOpsPanel() {
 
     try {
       setBusy(true);
-      const functionName = paused ? "unpause" : "pause";
       const hash = await walletClient.writeContract({
         address: canonicalDeployment.contracts.EscrowFlowRegistry,
         abi: escrowRegistryAbi,
-        functionName,
+        functionName: nextAction,
         args: [] as const,
         chain: walletClient.chain,
         account: walletClient.account,
       });
       await publicClient.waitForTransactionReceipt({ hash });
       await refreshPaused();
-      setSuccessMessage(paused ? "Contract unpaused." : "Contract paused.");
+      setSuccessMessage(nextAction === "unpause" ? "Contract unpaused." : "Contract paused.");
     } catch (e) {
       setErrorMessage(formatEscrowRegistryWriteError(e, "Pause/unpause failed."));
     } finally {
@@ -80,9 +79,9 @@ export function PauseOpsPanel() {
           type="button"
           size="sm"
           className="w-full sm:w-auto"
-          disabled={!canWrite || busy || !isLoading || paused === false}
+          disabled={!canWrite || busy || isLoading || !paused}
           variant={paused ? "secondary" : "primary"}
-          onClick={() => void onPauseOrUnpause()}
+          onClick={() => void onPauseOrUnpause("unpause")}
         >
           Unpause
         </Button>
@@ -90,9 +89,9 @@ export function PauseOpsPanel() {
           type="button"
           size="sm"
           className="w-full sm:w-auto"
-          disabled={!canWrite || busy || !isLoading || paused === true}
+          disabled={!canWrite || busy || isLoading || paused}
           variant={!paused ? "secondary" : "primary"}
-          onClick={() => void onPauseOrUnpause()}
+          onClick={() => void onPauseOrUnpause("pause")}
         >
           Pause
         </Button>

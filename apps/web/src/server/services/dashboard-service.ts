@@ -4,6 +4,7 @@ import {
   Prisma,
   ProjectStatus,
   ProjectVisibility,
+  TransactionLogSourceType,
 } from "@prisma/client";
 import type {
   ClientDashboard,
@@ -153,6 +154,7 @@ export async function buildClientDashboard(userId: string): Promise<ClientDashbo
         blockNumber: true,
         logIndex: true,
         eventName: true,
+        sourceType: true,
         projectId: true,
         milestoneId: true,
         payload: true,
@@ -320,6 +322,7 @@ export async function buildFreelancerDashboard(
       FROM "transaction_logs" tl
       INNER JOIN "projects" p ON p."id" = tl."projectId"
       WHERE p."freelancerUserId" = ${userId}
+        AND tl."sourceType" = ${TransactionLogSourceType.chain_event}::"TransactionLogSourceType"
     `),
     prisma.transactionLog.findMany({
       where: {
@@ -333,6 +336,7 @@ export async function buildFreelancerDashboard(
         blockNumber: true,
         logIndex: true,
         eventName: true,
+        sourceType: true,
         projectId: true,
         milestoneId: true,
         payload: true,
@@ -481,6 +485,7 @@ function mapRecentTransaction(tx: {
   blockNumber: bigint;
   logIndex: number;
   eventName: string;
+  sourceType: TransactionLogSourceType;
   projectId: string | null;
   milestoneId: string | null;
   payload: Prisma.JsonValue;
@@ -503,6 +508,7 @@ function mapRecentTransaction(tx: {
     blockNumber: tx.blockNumber.toString(),
     logIndex: tx.logIndex,
     eventName: tx.eventName,
+    sourceType: tx.sourceType,
     projectId: tx.projectId,
     milestoneId: tx.milestoneId,
     amountWei: typeof amountRaw === "string" ? amountRaw : null,

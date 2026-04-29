@@ -10,12 +10,17 @@ import { FieldError } from "@/components/ui/field-error";
 import { Input } from "@/components/ui/input";
 import { escrowRegistryAbi } from "@/lib/contracts/escrow-registry-abi.full";
 import { formatEscrowRegistryWriteError } from "@/lib/contracts/decode-error";
+import { SyncStatusNotice } from "@/components/sync/sync-status-notice";
+import { useSyncReconciliation } from "@/hooks/use-sync-reconciliation";
 
 type RecipientState = {
   pendingRecipient: `0x${string}` | null;
   executableAfter: string | null;
   activeExecutedRecipient: `0x${string}` | null;
   partyAuthorizedRecipient: `0x${string}` | null;
+  status: "pending" | "active" | "cleared";
+  updatedAtBlock: string | null;
+  updatedAtTxHash: `0x${string}` | null;
 };
 
 export function AlternativeRecipientPanel(props: {
@@ -42,6 +47,8 @@ export function AlternativeRecipientPanel(props: {
   const [isBusy, setIsBusy] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [stateMismatchMessage, setStateMismatchMessage] = useState<string | null>(null);
+  const syncTracker = useSyncReconciliation(true);
   const [nowUnixSeconds, setNowUnixSeconds] = useState<number>(() =>
     Math.floor(Date.now() / 1000),
   );
@@ -98,6 +105,7 @@ export function AlternativeRecipientPanel(props: {
     : null;
   const activeExecutedRecipient = recipientState?.activeExecutedRecipient ?? null;
   const partyAuthorizedRecipient = recipientState?.partyAuthorizedRecipient ?? null;
+  const normalizedStatus = recipientState?.status ?? "cleared";
 
   const executableAfterDate =
     executableAfter != null ? new Date(Number(executableAfter) * 1000) : null;
@@ -139,6 +147,25 @@ export function AlternativeRecipientPanel(props: {
       return;
     }
     try {
+      const [paused, projectTuple] = await Promise.all([
+        publicClient!.readContract({
+          address: props.escrowContractAddress as `0x${string}`,
+          abi: escrowRegistryAbi,
+          functionName: "paused",
+        }),
+        publicClient!.readContract({
+          address: props.escrowContractAddress as `0x${string}`,
+          abi: escrowRegistryAbi,
+          functionName: "getProject",
+          args: [BigInt(props.onChainProjectId!)],
+        }),
+      ]);
+      if (Boolean(paused) || Number(projectTuple.status) >= 2) {
+        setStateMismatchMessage(
+          "On-chain project state changed. Refresh project data before executing recipient.",
+        );
+        return;
+      }
       setIsBusy(true);
       const hash = await walletClient.writeContract({
         address: props.escrowContractAddress as `0x${string}`,
@@ -149,7 +176,10 @@ export function AlternativeRecipientPanel(props: {
         account: walletClient.account,
       });
       await publicClient!.waitForTransactionReceipt({ hash });
+      const receipt = await publicClient!.getTransactionReceipt({ hash });
+      syncTracker.onTxConfirmed(receipt.blockNumber);
       await recipientStateQuery.refetch();
+      syncTracker.markUiRefreshed();
       setSuccessMessage("Alternative recipient executed successfully.");
     } catch (e) {
       setErrorMessage(formatEscrowRegistryWriteError(e, "Could not execute alternative recipient."));
@@ -175,6 +205,15 @@ export function AlternativeRecipientPanel(props: {
       return;
     }
     try {
+      const paused = await publicClient!.readContract({
+        address: props.escrowContractAddress as `0x${string}`,
+        abi: escrowRegistryAbi,
+        functionName: "paused",
+      });
+      if (Boolean(paused)) {
+        setStateMismatchMessage("Contract is paused on-chain. Refresh and retry when unpaused.");
+        return;
+      }
       setIsBusy(true);
       const hash = await walletClient.writeContract({
         address: props.escrowContractAddress as `0x${string}`,
@@ -185,7 +224,10 @@ export function AlternativeRecipientPanel(props: {
         account: walletClient.account,
       });
       await publicClient!.waitForTransactionReceipt({ hash });
+      const receipt = await publicClient!.getTransactionReceipt({ hash });
+      syncTracker.onTxConfirmed(receipt.blockNumber);
       await recipientStateQuery.refetch();
+      syncTracker.markUiRefreshed();
       setSuccessMessage("Direct recipient authorization updated.");
     } catch (e) {
       setErrorMessage(formatEscrowRegistryWriteError(e, "Could not update party recipient."));
@@ -215,6 +257,15 @@ export function AlternativeRecipientPanel(props: {
       return;
     }
     try {
+      const paused = await publicClient!.readContract({
+        address: props.escrowContractAddress as `0x${string}`,
+        abi: escrowRegistryAbi,
+        functionName: "paused",
+      });
+      if (Boolean(paused)) {
+        setStateMismatchMessage("Contract is paused on-chain. Refresh and retry when unpaused.");
+        return;
+      }
       setIsBusy(true);
       const hash = await walletClient.writeContract({
         address: props.escrowContractAddress as `0x${string}`,
@@ -234,7 +285,10 @@ export function AlternativeRecipientPanel(props: {
         account: walletClient.account,
       });
       await publicClient!.waitForTransactionReceipt({ hash });
+      const receipt = await publicClient!.getTransactionReceipt({ hash });
+      syncTracker.onTxConfirmed(receipt.blockNumber);
       await recipientStateQuery.refetch();
+      syncTracker.markUiRefreshed();
       setSuccessMessage("Signature-based recipient authorization submitted.");
     } catch (e) {
       setErrorMessage(
@@ -275,6 +329,7 @@ export function AlternativeRecipientPanel(props: {
       <p className="mt-1 text-xs text-zinc-300">
         Party-authorized recipient: {partyAuthorizedRecipient ?? "None"}
       </p>
+      <p className="mt-1 text-xs text-zinc-300">Normalized status: {normalizedStatus}</p>
 
       <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
         <Button
@@ -350,6 +405,18 @@ export function AlternativeRecipientPanel(props: {
       </details>
 
       {errorMessage ? <FieldError message={errorMessage} className="mt-2 text-xs" /> : null}
+      {stateMismatchMessage ? (
+        <p className="mt-2 text-xs text-amber-200">{stateMismatchMessage}</p>
+      ) : null}
+      <SyncStatusNotice
+        stage={syncTracker.stage}
+        syncStatus={syncTracker.syncStatus}
+        syncStatusError={syncTracker.syncStatusError}
+        onRefresh={() => {
+          void recipientStateQuery.refetch();
+          void syncTracker.refetchSyncStatus();
+        }}
+      />
       {successMessage ? (
         <p className="mt-2 text-xs text-emerald-300">{successMessage}</p>
       ) : null}

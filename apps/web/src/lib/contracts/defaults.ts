@@ -21,6 +21,10 @@ const schema = z.object({
     .refine((v) => !v || isAddress(v), "CONTRACTS_PAYMENT_TOKEN_ADDRESS is invalid")
     .transform((v) => (v ? v.toLowerCase() : undefined)),
   CONTRACTS_DEPLOYMENT_PATH: z.string().trim().optional(),
+  CONTRACTS_ALLOW_NON_CANONICAL_ESCROW_OVERRIDE: z
+    .union([z.literal("true"), z.literal("false")])
+    .optional()
+    .transform((v) => v === "true"),
 });
 
 type ContractsDefaultsEnv = z.infer<typeof schema>;
@@ -41,6 +45,17 @@ export function getContractRuntimeDefaults(): ContractRuntimeDefaults {
 
   const env = getEnv();
   const fromArtifact = readDeploymentArtifact(env.CONTRACTS_DEPLOYMENT_PATH);
+  const canonicalEscrow = canonicalDeployment.contracts.EscrowFlowRegistry;
+  const allowNonCanonicalEscrow =
+    process.env.NODE_ENV !== "production" &&
+    env.CONTRACTS_ALLOW_NON_CANONICAL_ESCROW_OVERRIDE === true;
+  const resolvedEscrowAddress =
+    env.CONTRACTS_ESCROW_REGISTRY_ADDRESS ??
+    fromArtifact?.contracts?.EscrowFlowRegistry?.toLowerCase() ??
+    canonicalEscrow;
+  const escrowContractAddress = allowNonCanonicalEscrow
+    ? resolvedEscrowAddress
+    : canonicalEscrow;
 
   cachedDefaults = {
     chainId:
@@ -48,9 +63,7 @@ export function getContractRuntimeDefaults(): ContractRuntimeDefaults {
       fromArtifact?.chainId ??
       canonicalDeployment.chainId,
     escrowContractAddress:
-      env.CONTRACTS_ESCROW_REGISTRY_ADDRESS ??
-      fromArtifact?.contracts?.EscrowFlowRegistry?.toLowerCase() ??
-      canonicalDeployment.contracts.EscrowFlowRegistry,
+      escrowContractAddress,
     paymentTokenAddress:
       env.CONTRACTS_PAYMENT_TOKEN_ADDRESS ??
       fromArtifact?.contracts?.MockERC20Stablecoin?.toLowerCase() ??
@@ -68,6 +81,8 @@ function getEnv(): ContractsDefaultsEnv {
     CONTRACTS_ESCROW_REGISTRY_ADDRESS: process.env.CONTRACTS_ESCROW_REGISTRY_ADDRESS,
     CONTRACTS_PAYMENT_TOKEN_ADDRESS: process.env.CONTRACTS_PAYMENT_TOKEN_ADDRESS,
     CONTRACTS_DEPLOYMENT_PATH: process.env.CONTRACTS_DEPLOYMENT_PATH,
+    CONTRACTS_ALLOW_NON_CANONICAL_ESCROW_OVERRIDE:
+      process.env.CONTRACTS_ALLOW_NON_CANONICAL_ESCROW_OVERRIDE,
   });
   return cachedEnv;
 }

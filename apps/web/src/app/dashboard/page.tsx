@@ -10,6 +10,9 @@ import { useAccount, useBalance, useChainId } from "wagmi";
 import { arbitrumSepolia, baseSepolia, hardhat, mainnet, sepolia } from "wagmi/chains";
 
 import { AuthShell } from "@/components/layout/auth-shell";
+import { PauseOpsPanel } from "@/components/admin/pause-ops-panel";
+import { TokenGovernancePanel } from "@/components/admin/token-governance-panel";
+import { EmergencyAdminCancelPanel } from "@/components/admin/emergency-admin-cancel-panel";
 import { IdentityCard as DashboardIdentityCard, type IdentityRole } from "@/components/dashboard/identity-card";
 import { Button, buttonClassName } from "@/components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -185,9 +188,19 @@ export default function DashboardPage() {
   } else if (dashboardLens === "ADMIN") {
     content = (
       <DashboardRoleLayout
-        topLeft={<AdminDashboardTopCard onOpenDisputes={() => router.push("/admin/disputes")} />}
+        topLeft={
+          <AdminDashboardTopCard
+            onOpenDisputes={() => router.push("/admin/disputes")}
+            onOpenRoles={() => router.push("/admin/roles")}
+          />
+        }
         topRight={rightPane}
-        below={<AdminDashboardSections onOpenDisputes={() => router.push("/admin/disputes")} />}
+        below={
+          <AdminDashboardSections
+            onOpenDisputes={() => router.push("/admin/disputes")}
+            onOpenRoles={() => router.push("/admin/roles")}
+          />
+        }
       />
     );
   } else if (!me.roles.some((r) => r === "CLIENT" || r === "FREELANCER" || r === "ADMIN")) {
@@ -600,7 +613,13 @@ function FreelancerDashboardSections({
   );
 }
 
-function AdminDashboardTopCard({ onOpenDisputes }: { onOpenDisputes: () => void }) {
+function AdminDashboardTopCard({
+  onOpenDisputes,
+  onOpenRoles,
+}: {
+  onOpenDisputes: () => void;
+  onOpenRoles: () => void;
+}) {
   return (
     <Card className="w-full max-w-full overflow-hidden">
       <CardHeader>
@@ -610,6 +629,9 @@ function AdminDashboardTopCard({ onOpenDisputes }: { onOpenDisputes: () => void 
         </CardDescription>
       </CardHeader>
       <div className="grid grid-cols-1 gap-2 border-t border-zinc-800/90 bg-gradient-to-r from-zinc-950/35 via-zinc-900/25 to-zinc-950/35 px-4 py-4 sm:flex sm:flex-row sm:flex-wrap sm:justify-end sm:px-6 sm:py-5">
+        <Button type="button" variant="secondary" className="w-full sm:w-auto" onClick={onOpenRoles}>
+          Open role governance
+        </Button>
         <Button type="button" className="w-full sm:w-auto" onClick={onOpenDisputes}>
           Open dispute management
         </Button>
@@ -618,7 +640,13 @@ function AdminDashboardTopCard({ onOpenDisputes }: { onOpenDisputes: () => void 
   );
 }
 
-function AdminDashboardSections({ onOpenDisputes }: { onOpenDisputes: () => void }) {
+function AdminDashboardSections({
+  onOpenDisputes,
+  onOpenRoles,
+}: {
+  onOpenDisputes: () => void;
+  onOpenRoles: () => void;
+}) {
   return (
     <div className="flex w-full max-w-full flex-col gap-5">
 
@@ -647,6 +675,24 @@ function AdminDashboardSections({ onOpenDisputes }: { onOpenDisputes: () => void
           </Button>
         </div>
       </Card>
+
+      <Card className="w-full max-w-full">
+        <CardHeader>
+          <CardTitle className="text-lg sm:text-xl">Role governance actions</CardTitle>
+          <CardDescription>
+            Manage on-chain roles and arbitrator threshold from the dedicated governance page.
+          </CardDescription>
+        </CardHeader>
+        <div className="px-4 pb-4 sm:px-6 sm:pb-6">
+          <Button type="button" variant="secondary" className="w-full sm:w-auto" onClick={onOpenRoles}>
+            Open role governance
+          </Button>
+        </div>
+      </Card>
+
+      <PauseOpsPanel />
+      <TokenGovernancePanel />
+      <EmergencyAdminCancelPanel />
     </div>
   );
 }
@@ -811,6 +857,15 @@ function TransactionList({
           className="rounded-xl border border-zinc-800/90 p-3.5"
         >
           <p className="text-sm font-semibold text-zinc-100">{tx.eventName}</p>
+          <p className="mt-1 text-[11px] uppercase tracking-[0.08em] text-zinc-500">
+            {tx.sourceType === "chain_event"
+              ? "Chain event"
+              : tx.sourceType === "synthetic_client_reconcile"
+                ? "Synthetic reconcile"
+                : tx.sourceType === "backend_metadata"
+                  ? "Backend metadata"
+                  : "Unknown source"}
+          </p>
           <p className="mt-1 break-all font-mono text-xs text-zinc-600 dark:text-zinc-400">
             {shortHash(tx.txHash)}
           </p>

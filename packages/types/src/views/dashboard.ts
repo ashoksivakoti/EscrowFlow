@@ -37,6 +37,7 @@ export type DashboardRecentTransaction = {
   blockNumber: string;
   logIndex: number;
   eventName: string;
+  sourceType?: "chain_event" | "synthetic_client_reconcile" | "backend_metadata";
   projectId: EntityId | null;
   milestoneId: EntityId | null;
   amountWei?: string | null;

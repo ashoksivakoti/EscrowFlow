@@ -1,4 +1,11 @@
-import { DisputeStatus, MilestoneStatus, Prisma, ProjectStatus, SubmissionStatus } from "@prisma/client";
+import {
+  DisputeStatus,
+  MilestoneStatus,
+  Prisma,
+  ProjectStatus,
+  SubmissionStatus,
+  TransactionLogSourceType,
+} from "@prisma/client";
 
 import type {
   AdminDisputeDetail,
@@ -164,6 +171,9 @@ export async function resolveDisputeAsAdmin(input: {
           },
         },
         update: {
+          sourceType: input.payload.resolutionTxHash
+            ? TransactionLogSourceType.synthetic_client_reconcile
+            : TransactionLogSourceType.backend_metadata,
           payload: {
             disputeId: dispute.id,
             milestoneId: dispute.milestoneId,
@@ -180,6 +190,9 @@ export async function resolveDisputeAsAdmin(input: {
           txHash,
           logIndex: -1,
           eventName: "DisputeResolved",
+          sourceType: input.payload.resolutionTxHash
+            ? TransactionLogSourceType.synthetic_client_reconcile
+            : TransactionLogSourceType.backend_metadata,
           projectId: dispute.milestone.projectId,
           milestoneId: dispute.milestoneId,
           initiatedByUserId: input.adminUserId,
@@ -470,7 +483,7 @@ async function mapAdminDisputeDetail(dispute: {
     };
   };
 }): Promise<AdminDisputeDetail> {
-  const [fundedRows, releasedRows, recentTxRaw, resolutionTx] = await prisma.$transaction([
+  const [fundedRows, releasedRows, recentTxRaw, resolutionTx, emergencyProposalRow] = await prisma.$transaction([
     prisma.$queryRaw<Array<{ funded: string | null }>>(Prisma.sql`
       SELECT COALESCE(
         MAX(
@@ -494,6 +507,7 @@ async function mapAdminDisputeDetail(dispute: {
       )::text AS funded
       FROM "transaction_logs" tl
       WHERE tl."projectId" = ${dispute.milestone.project.id}
+        AND tl."sourceType" = ${TransactionLogSourceType.chain_event}::"TransactionLogSourceType"
     `),
     prisma.$queryRaw<Array<{ released: string | null }>>(Prisma.sql`
       SELECT COALESCE(SUM(
@@ -507,6 +521,7 @@ async function mapAdminDisputeDetail(dispute: {
       ), 0)::text AS released
       FROM "transaction_logs" tl
       WHERE tl."projectId" = ${dispute.milestone.project.id}
+        AND tl."sourceType" = ${TransactionLogSourceType.chain_event}::"TransactionLogSourceType"
     `),
     prisma.transactionLog.findMany({
       where: {
@@ -523,6 +538,7 @@ async function mapAdminDisputeDetail(dispute: {
         blockNumber: true,
         logIndex: true,
         eventName: true,
+        sourceType: true,
         fromAddress: true,
         toAddress: true,
         payload: true,
@@ -533,9 +549,30 @@ async function mapAdminDisputeDetail(dispute: {
       where: {
         milestoneId: dispute.milestoneId,
         eventName: "DisputeResolved",
+        sourceType: TransactionLogSourceType.chain_event,
       },
       orderBy: { createdAt: "desc" },
       select: { payload: true },
+    }),
+    prisma.emergencyResolutionProposal.findFirst({
+      where: {
+        chainId: dispute.milestone.project.chainId ?? undefined,
+        contractAddress: dispute.milestone.project.escrowContractAddress ?? undefined,
+        projectId: dispute.milestone.project.onChainProjectId ?? undefined,
+        milestoneIndex: dispute.milestone.sortOrder,
+      },
+      orderBy: { updatedAt: "desc" },
+      select: {
+        status: true,
+        actionHash: true,
+        kind: true,
+        freelancerAmount: true,
+        clientAmount: true,
+        readyAt: true,
+        txHash: true,
+        logIndex: true,
+        updatedAt: true,
+      },
     }),
   ]);
 
@@ -618,6 +655,19 @@ async function mapAdminDisputeDetail(dispute: {
           note: typeof resolutionPayload?.note === "string" ? resolutionPayload.note : null,
         }
       : null,
+    emergencyResolutionProposal: emergencyProposalRow
+      ? {
+          status: emergencyProposalRow.status,
+          actionHash: emergencyProposalRow.actionHash,
+          kind: emergencyProposalRow.kind,
+          freelancerAmountWei: emergencyProposalRow.freelancerAmount,
+          clientAmountWei: emergencyProposalRow.clientAmount,
+          readyAt: emergencyProposalRow.readyAt?.toISOString() ?? null,
+          txHash: emergencyProposalRow.txHash,
+          logIndex: emergencyProposalRow.logIndex,
+          updatedAt: emergencyProposalRow.updatedAt.toISOString(),
+        }
+      : null,
     recentTransactions: recentTxRaw.map((tx) => {
       const payloadObject = tx.payload && typeof tx.payload === "object" ? tx.payload : null;
       const blockTimestampRaw =
@@ -636,6 +686,7 @@ async function mapAdminDisputeDetail(dispute: {
         blockNumber: tx.blockNumber.toString(),
         logIndex: tx.logIndex,
         eventName: tx.eventName,
+        sourceType: tx.sourceType,
         fromAddress: tx.fromAddress,
         toAddress: tx.toAddress,
         amountWei: typeof amountRaw === "string" ? amountRaw : null,

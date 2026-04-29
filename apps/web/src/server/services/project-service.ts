@@ -1,4 +1,11 @@
-import { DisputeStatus, PlatformRole, Prisma, ProjectStatus, ProjectVisibility } from "@prisma/client";
+import {
+  DisputeStatus,
+  PlatformRole,
+  Prisma,
+  ProjectStatus,
+  ProjectVisibility,
+  TransactionLogSourceType,
+} from "@prisma/client";
 import { getAddress } from "viem";
 
 import type {
@@ -27,6 +34,7 @@ import { prisma, prismaInteractiveTransactionOptions } from "@/lib/prisma";
 import { uploadFileToIpfs, uploadJsonToIpfs } from "@/lib/ipfs";
 import { getIpfsEnv } from "@/lib/ipfs/env";
 import { getContractRuntimeDefaults } from "@/lib/contracts/defaults";
+import { canonicalDeployment } from "@/lib/contracts/contract-addresses";
 import { toUserPublicRef } from "@/server/mappers/user-public-ref";
 import { AppError } from "@/server/errors/app-error";
 import { createLogger } from "@/server/logging/logger";
@@ -35,6 +43,36 @@ import {
   ensurePublicMarketplaceProjectRow,
 } from "@/server/services/marketplace-project-policy";
 import { notifyProjectCreated } from "@/server/services/notification-events";
+
+function canUseNonCanonicalEscrowOverride(): boolean {
+  return (
+    process.env.NODE_ENV !== "production" &&
+    process.env.CONTRACTS_ALLOW_NON_CANONICAL_ESCROW_OVERRIDE === "true"
+  );
+}
+
+function assertCanonicalEscrowRegistry(input: {
+  escrowContractAddress: string | null;
+  context: string;
+}): void {
+  if (!input.escrowContractAddress) {
+    throw AppError.badRequest(
+      "ESCROW_CONTRACT_REQUIRED",
+      "Escrow registry address is required for project creation.",
+    );
+  }
+  const canonical = canonicalDeployment.contracts.EscrowFlowRegistry.toLowerCase();
+  if (input.escrowContractAddress.toLowerCase() === canonical) {
+    return;
+  }
+  if (canUseNonCanonicalEscrowOverride()) {
+    return;
+  }
+  throw AppError.badRequest(
+    "NON_CANONICAL_ESCROW_REGISTRY",
+    `Non-canonical escrow registry rejected for ${input.context}. Expected ${canonical}.`,
+  );
+}
 
 function normalizeWalletOrThrow(raw: string): string {
   try {
@@ -60,6 +98,10 @@ export async function createProjectForClient(
     : defaults.escrowContractAddress
       ? normalizeWalletOrThrow(defaults.escrowContractAddress)
     : null;
+  assertCanonicalEscrowRegistry({
+    escrowContractAddress,
+    context: "project creation",
+  });
 
   const freelancer = await prisma.user.findUnique({
     where: { walletAddress: freelancerWallet },
@@ -160,6 +202,10 @@ export async function createMarketplaceProjectForClient(
     : defaults.escrowContractAddress
       ? normalizeWalletOrThrow(defaults.escrowContractAddress)
       : null;
+  assertCanonicalEscrowRegistry({
+    escrowContractAddress,
+    context: "marketplace project creation",
+  });
 
   const agreementIpfsUri = await maybeUploadAgreement(payload);
 
@@ -270,6 +316,10 @@ export async function confirmOnChainProjectBinding(
         "Chain id, escrow contract, payment token, and milestone totals must be set before linking",
       );
     }
+    assertCanonicalEscrowRegistry({
+      escrowContractAddress: row.escrowContractAddress,
+      context: "on-chain project binding",
+    });
 
     const milestoneCount = await tx.milestone.count({ where: { projectId } });
     if (milestoneCount === 0) {
@@ -689,6 +739,7 @@ export async function getProjectDetailForUser(
           blockNumber: true,
           logIndex: true,
           eventName: true,
+          sourceType: true,
           fromAddress: true,
           toAddress: true,
           payload: true,
@@ -718,6 +769,7 @@ export async function getProjectDetailForUser(
         )::text AS funded
         FROM "transaction_logs" tl
         WHERE tl."projectId" = ${projectId}
+          AND tl."sourceType" = ${TransactionLogSourceType.chain_event}::"TransactionLogSourceType"
       `),
       prisma.$queryRaw<Array<{ released: string | null }>>(Prisma.sql`
         SELECT COALESCE(SUM(
@@ -731,6 +783,7 @@ export async function getProjectDetailForUser(
         ), 0)::text AS released
         FROM "transaction_logs" tl
         WHERE tl."projectId" = ${projectId}
+          AND tl."sourceType" = ${TransactionLogSourceType.chain_event}::"TransactionLogSourceType"
       `),
     ]);
   if (!row) {
@@ -912,6 +965,7 @@ function mapProjectTransactionHistory(tx: {
   blockNumber: bigint;
   logIndex: number;
   eventName: string;
+  sourceType: TransactionLogSourceType;
   fromAddress: string | null;
   toAddress: string | null;
   payload: Prisma.JsonValue;
@@ -935,6 +989,7 @@ function mapProjectTransactionHistory(tx: {
     blockNumber: tx.blockNumber.toString(),
     logIndex: tx.logIndex,
     eventName: tx.eventName,
+    sourceType: tx.sourceType,
     fromAddress: tx.fromAddress,
     toAddress: tx.toAddress,
     amountWei: typeof amountRaw === "string" ? amountRaw : null,
@@ -957,6 +1012,12 @@ async function mapLatestSubmissionWithMetadata(submission: {
     where: {
       milestoneId: submission.milestoneId,
       eventName: { in: ["MilestoneSubmissionCreated", "MilestoneApproved"] },
+      sourceType: {
+        in: [
+          TransactionLogSourceType.backend_metadata,
+          TransactionLogSourceType.synthetic_client_reconcile,
+        ],
+      },
     },
     orderBy: { createdAt: "desc" },
     take: 20,

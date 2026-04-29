@@ -17,8 +17,10 @@ import { needsOnboarding } from "@/lib/auth/client-guards";
 import { useMeQuery } from "@/hooks/use-me-query";
 import { useProjectDetailQuery } from "@/hooks/use-project-detail-query";
 import { useSessionQuery } from "@/hooks/use-session-query";
+import { useEventSyncStatus } from "@/hooks/use-event-sync-status";
 import { getExplorerTxUrl } from "@/lib/chains/explorer";
 import { useContractPaused } from "@/components/providers/contract-pause-provider";
+import { SyncStatusNotice } from "@/components/sync/sync-status-notice";
 import {
   canRaiseDispute,
   canSubmitMilestone,
@@ -37,6 +39,7 @@ export default function ProjectDetailShellPage() {
   const meEnabled = Boolean(session?.authenticated);
   const { data: me, isPending: meLoading, isFetched: meFetched } = useMeQuery(meEnabled);
   const { data: project, isPending: projectLoading } = useProjectDetailQuery(projectId, meEnabled);
+  const syncStatus = useEventSyncStatus(Boolean(meEnabled));
 
   useEffect(() => {
     if (sessionLoading) {
@@ -75,6 +78,15 @@ export default function ProjectDetailShellPage() {
         <ProjectDetailSkeleton />
       ) : (
         <div className="flex w-full max-w-full flex-col gap-5">
+          <SyncStatusNotice
+            stage="idle"
+            syncStatus={syncStatus.data ?? null}
+            syncStatusError={syncStatus.error instanceof Error ? syncStatus.error.message : null}
+            onRefresh={() => {
+              void syncStatus.refetch();
+              void router.refresh();
+            }}
+          />
           <Card className="overflow-hidden">
             <CardHeader>
               <CardTitle className="break-words text-2xl tracking-tight sm:text-3xl">{project.title}</CardTitle>

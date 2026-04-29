@@ -91,6 +91,31 @@ enum NotificationType {
   MODERATION
 }
 
+enum TransactionLogSourceType {
+  chain_event
+  synthetic_client_reconcile
+  backend_metadata
+}
+
+enum EmergencyResolutionProposalStatus {
+  proposed
+  cancelled
+  executed
+  invalidated
+}
+
+enum AlternativeRecipientStatus {
+  pending
+  active
+  cleared
+}
+
+enum RoleGovernanceEventType {
+  role_granted
+  role_revoked
+  role_admin_changed
+}
+
 // -----------------------------------------------------------------------------
 // Auth (SIWE nonces — single-use, short-lived)
 // -----------------------------------------------------------------------------
@@ -221,6 +246,8 @@ model Project {
   updatedAt DateTime @updatedAt
 
   milestones      Milestone[]
+  emergencyResolutionProposals EmergencyResolutionProposal[]
+  alternativeRecipientStates   AlternativeRecipientState[]
   applications    ProjectApplication[]
   transactionLogs TransactionLog[]
   notifications   Notification[]
@@ -232,6 +259,177 @@ model Project {
   @@index([status, visibility, updatedAt])
   @@index([chainId, escrowContractAddress])
   @@map("projects")
+}
+
+model TokenGovernanceState {
+  id String @id @default(cuid())
+
+  chainId         Int
+  contractAddress String
+  token           String
+
+  reviewed  Boolean @default(false)
+  allowed   Boolean @default(false)
+  reviewedBy String?
+
+  lastUpdatedTxHash String
+  lastUpdatedBlock  BigInt
+  lastUpdatedLogIndex Int
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([chainId, contractAddress, token])
+  @@index([chainId, contractAddress, reviewed, allowed, updatedAt])
+  @@map("token_governance_states")
+}
+
+model RoleMembershipState {
+  id String @id @default(cuid())
+
+  chainId         Int
+  contractAddress String
+  role            String
+  account         String
+
+  isActive Boolean @default(false)
+  lastUpdatedBy String?
+  lastUpdatedTxHash String
+  lastUpdatedBlock  BigInt
+  lastUpdatedLogIndex Int
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([chainId, contractAddress, role, account])
+  @@index([chainId, contractAddress, role, isActive, updatedAt])
+  @@map("role_membership_states")
+}
+
+model RoleGovernanceEvent {
+  id String @id @default(cuid())
+
+  chainId         Int
+  contractAddress String
+  eventType       RoleGovernanceEventType
+
+  role            String
+  account         String?
+  sender          String?
+  previousAdminRole String?
+  newAdminRole      String?
+
+  txHash   String
+  logIndex Int
+  blockNumber BigInt
+
+  createdAt DateTime @default(now())
+
+  @@unique([chainId, txHash, logIndex])
+  @@index([chainId, contractAddress, role, blockNumber, logIndex])
+  @@map("role_governance_events")
+}
+
+model ArbitratorGovernanceState {
+  id String @id @default(cuid())
+
+  chainId         Int
+  contractAddress String
+  arbitratorCount Int @default(0)
+  arbitratorThreshold BigInt?
+
+  lastUpdatedTxHash String
+  lastUpdatedBlock  BigInt
+  lastUpdatedLogIndex Int
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([chainId, contractAddress])
+  @@index([chainId, contractAddress, updatedAt])
+  @@map("arbitrator_governance_states")
+}
+
+model ArbitratorThresholdHistory {
+  id String @id @default(cuid())
+
+  chainId         Int
+  contractAddress String
+  previousThreshold BigInt
+  newThreshold      BigInt
+  updatedBy         String?
+
+  txHash      String
+  logIndex    Int
+  blockNumber BigInt
+
+  createdAt DateTime @default(now())
+
+  @@unique([chainId, txHash, logIndex])
+  @@index([chainId, contractAddress, blockNumber, logIndex])
+  @@map("arbitrator_threshold_histories")
+}
+
+model AlternativeRecipientState {
+  id String @id @default(cuid())
+
+  chainId         Int
+  contractAddress String
+
+  projectDbId String?
+  project     Project? @relation(fields: [projectDbId], references: [id], onDelete: SetNull)
+
+  projectId      String
+  milestoneIndex Int
+  isFreelancer   Boolean
+
+  pendingRecipient         String?
+  executableAfter          BigInt?
+  activeRecipient          String?
+  partyAuthorizedRecipient String?
+  status                   AlternativeRecipientStatus
+
+  updatedAtBlock  BigInt
+  updatedAtTxHash String
+  updatedAtLogIndex Int
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([chainId, contractAddress, projectId, milestoneIndex, isFreelancer])
+  @@index([projectDbId, milestoneIndex, isFreelancer, updatedAt])
+  @@index([chainId, contractAddress, projectId, milestoneIndex, isFreelancer, updatedAt])
+  @@map("alternative_recipient_states")
+}
+
+model EmergencyResolutionProposal {
+  id String @id @default(cuid())
+
+  chainId         Int
+  contractAddress String
+
+  projectDbId String?
+  project     Project? @relation(fields: [projectDbId], references: [id], onDelete: SetNull)
+
+  projectId      String
+  milestoneIndex Int
+  actionHash     String?
+  kind           Int?
+  freelancerAmount String?
+  clientAmount     String?
+  readyAt          DateTime?
+  status         EmergencyResolutionProposalStatus
+
+  txHash   String
+  logIndex Int
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([chainId, txHash, logIndex])
+  @@index([chainId, contractAddress, projectId, milestoneIndex, updatedAt])
+  @@index([projectDbId, updatedAt])
+  @@map("emergency_resolution_proposals")
 }
 
 model ProjectApplication {
@@ -381,6 +579,7 @@ model TransactionLog {
 
   /// High-level name, e.g. `Deposited`, `Released`, `DisputeOpened` (align with contracts/events).
   eventName String
+  sourceType TransactionLogSourceType @default(backend_metadata)
 
   projectId String?
   project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
@@ -401,6 +600,7 @@ model TransactionLog {
 
   @@unique([chainId, txHash, logIndex])
   @@index([chainId, blockNumber])
+  @@index([sourceType, createdAt])
   @@index([projectId, createdAt])
   @@index([milestoneId, createdAt])
   @@index([initiatedByUserId])
@@ -488,4 +688,27 @@ model EventSyncCheckpoint {
   @@unique([chainId, scope])
   @@index([chainId, updatedAt])
   @@map("event_sync_checkpoints")
+}
+
+/// Latest known on-chain pause state per contract scope.
+model ContractPauseState {
+  id String @id @default(cuid())
+
+  chainId         Int
+  contractAddress String
+  paused          Boolean
+  eventName       String
+  updatedBy       String?
+
+  lastChangedBlock    BigInt
+  lastChangedTxHash   String
+  lastChangedLogIndex Int
+  lastChangedAt       DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([chainId, contractAddress])
+  @@index([chainId, contractAddress, updatedAt])
+  @@map("contract_pause_states")
 }

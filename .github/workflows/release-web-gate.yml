@@ -21,9 +21,14 @@ jobs:
       EVENT_SYNC_CHAIN_ID: "421614"
       EVENT_SYNC_CONTRACT_ADDRESS: "0xe5AF7E2CF6435de6B0a0520518FCaaab851BB40c"
       EVENT_SYNC_SCOPE: "ESCROW_REGISTRY:0xe5af7e2cf6435de6b0a0520518fcaaab851bb40c"
-      EVENT_SYNC_START_BLOCK: ${{ secrets.EVENT_SYNC_START_BLOCK }}
+      EVENT_SYNC_START_BLOCK: "263614332"
       EVENT_SYNC_TRIGGER_TOKEN: ${{ secrets.EVENT_SYNC_TRIGGER_TOKEN }}
+      CONTRACTS_ESCROW_REGISTRY_ADDRESS: "0xe5AF7E2CF6435de6B0a0520518FCaaab851BB40c"
       CONTRACTS_PAYMENT_TOKEN_ADDRESS: ${{ secrets.CONTRACTS_PAYMENT_TOKEN_ADDRESS }}
+      E2E_ENABLED: "true"
+      E2E_INTERNAL_TOKEN: ${{ secrets.E2E_INTERNAL_TOKEN }}
+      NEXT_PUBLIC_E2E_INTERNAL_TOKEN: ${{ secrets.E2E_INTERNAL_TOKEN }}
+      E2E_ADMIN_PRIVATE_KEY: ${{ secrets.E2E_ADMIN_PRIVATE_KEY }}
     steps:
       - uses: actions/checkout@v4
 
@@ -37,5 +42,16 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
+      - name: Generate Prisma client + apply migrations
+        run: |
+          pnpm db:generate
+          pnpm db:migrate:deploy
+
       - name: Validate env + contract sanity + web build
         run: pnpm ci:release:web
+
+      - name: Browser E2E convergence (optional when secrets configured)
+        if: ${{ secrets.E2E_INTERNAL_TOKEN != '' && secrets.E2E_ADMIN_PRIVATE_KEY != '' }}
+        run: |
+          pnpm --filter @escrowflow/web exec playwright install --with-deps chromium
+          pnpm --filter @escrowflow/web e2e

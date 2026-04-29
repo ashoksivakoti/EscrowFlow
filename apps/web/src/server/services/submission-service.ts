@@ -2,6 +2,7 @@ import {
   MilestoneStatus,
   ProjectStatus,
   SubmissionStatus,
+  TransactionLogSourceType,
 } from "@prisma/client";
 
 import type {
@@ -84,6 +85,7 @@ export async function createMilestoneSubmissionForFreelancer(input: {
           txHash: `offchain-submission-${submission.id}`,
           logIndex: -1,
           eventName: "MilestoneSubmissionCreated",
+          sourceType: TransactionLogSourceType.backend_metadata,
           projectId: context.project.id,
           milestoneId: context.milestone.id,
           initiatedByUserId: input.freelancerUserId,

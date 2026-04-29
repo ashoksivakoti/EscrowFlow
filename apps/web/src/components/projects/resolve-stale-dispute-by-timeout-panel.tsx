@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { FieldError } from "@/components/ui/field-error";
 import { escrowRegistryAbi } from "@/lib/contracts/escrow-registry-abi.full";
 import { formatEscrowRegistryWriteError } from "@/lib/contracts/decode-error";
+import { SyncStatusNotice } from "@/components/sync/sync-status-notice";
+import { useSyncReconciliation } from "@/hooks/use-sync-reconciliation";
 
 const DISPUTE_ACTIVE_STATUSES = ["OPEN", "AWAITING_RESPONSE", "UNDER_ADMIN_REVIEW"] as const;
 
@@ -41,6 +43,7 @@ export function ResolveStaleDisputeByTimeoutPanel(props: {
   );
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const syncTracker = useSyncReconciliation(true);
 
   const [nowUnixSeconds, setNowUnixSeconds] = useState<number>(() =>
     Math.floor(Date.now() / 1000),
@@ -210,12 +213,15 @@ export function ResolveStaleDisputeByTimeoutPanel(props: {
                 });
                 setPhase("pending");
                 await publicClient.waitForTransactionReceipt({ hash });
+                const receipt = await publicClient.getTransactionReceipt({ hash });
+                syncTracker.onTxConfirmed(receipt.blockNumber);
 
                 await queryClient.invalidateQueries({ queryKey: ["project", props.projectId] });
                 await queryClient.invalidateQueries({ queryKey: ["projects"] });
 
                 // Admin disputes list also depends on dispute/milestone state.
                 await queryClient.invalidateQueries({ queryKey: ["admin-disputes"] });
+                syncTracker.markUiRefreshed();
 
                 setPhase("success");
                 setSuccessMessage("Stale dispute resolved on-chain.");
@@ -238,6 +244,17 @@ export function ResolveStaleDisputeByTimeoutPanel(props: {
       {successMessage ? (
         <p className="mt-2 text-xs text-emerald-300">{successMessage}</p>
       ) : null}
+      <div className="mt-2">
+        <SyncStatusNotice
+          stage={syncTracker.stage}
+          syncStatus={syncTracker.syncStatus}
+          syncStatusError={syncTracker.syncStatusError}
+          onRefresh={() => {
+            void queryClient.invalidateQueries({ queryKey: ["project", props.projectId] });
+            void syncTracker.refetchSyncStatus();
+          }}
+        />
+      </div>
     </div>
   );
 }

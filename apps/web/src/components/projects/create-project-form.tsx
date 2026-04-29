@@ -15,6 +15,7 @@ import {
   type ApiErrorJson,
 } from "@/lib/api/client-error";
 import {
+  canonicalDeployment,
   getEscrowRegistryAddressFromEnv,
   getChainIdFromEnv,
 } from "@/lib/contracts/contract-addresses";
@@ -82,6 +83,10 @@ const DEFAULT_ESCROW_ADDRESS = getEscrowRegistryAddressFromEnv(
 );
 const DEFAULT_TOKEN_ADDRESS =
   process.env.NEXT_PUBLIC_DEFAULT_PAYMENT_TOKEN_ADDRESS?.trim() ?? "";
+const ALLOW_NON_CANONICAL_ESCROW_OVERRIDE =
+  process.env.NEXT_PUBLIC_ALLOW_NON_CANONICAL_ESCROW_OVERRIDE === "true" &&
+  process.env.NODE_ENV !== "production";
+const CANONICAL_ESCROW_ADDRESS = canonicalDeployment.contracts.EscrowFlowRegistry;
 
 function parseLocalDateTimeToIso(localDateTime: string): string {
   const date = new Date(localDateTime);
@@ -179,6 +184,9 @@ export function CreateProjectForm() {
           mimeType: agreementFile.type || "application/octet-stream",
           fileBase64: await fileToBase64(agreementFile),
         };
+      }
+      if (!ALLOW_NON_CANONICAL_ESCROW_OVERRIDE) {
+        payload.escrowContractAddress = CANONICAL_ESCROW_ADDRESS;
       }
 
       const res = await fetch("/api/v1/projects", {
@@ -319,20 +327,30 @@ export function CreateProjectForm() {
                 />
                 <FieldError message={form.formState.errors.onChainProjectId?.message} />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="escrowContractAddress">
-                  Escrow contract address (optional)
-                </Label>
-                <Input
-                  id="escrowContractAddress"
-                  placeholder="0x..."
-                  aria-invalid={Boolean(form.formState.errors.escrowContractAddress)}
-                  {...form.register("escrowContractAddress")}
-                />
-                <FieldError
-                  message={form.formState.errors.escrowContractAddress?.message}
-                />
-              </div>
+              {ALLOW_NON_CANONICAL_ESCROW_OVERRIDE ? (
+                <div className="space-y-2">
+                  <Label htmlFor="escrowContractAddress">
+                    Escrow contract address (optional)
+                  </Label>
+                  <Input
+                    id="escrowContractAddress"
+                    placeholder="0x..."
+                    aria-invalid={Boolean(form.formState.errors.escrowContractAddress)}
+                    {...form.register("escrowContractAddress")}
+                  />
+                  <FieldError
+                    message={form.formState.errors.escrowContractAddress?.message}
+                  />
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <Label>Escrow contract address</Label>
+                  <Input value={CANONICAL_ESCROW_ADDRESS} disabled readOnly />
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                    Production lock: project creation is pinned to the canonical EscrowFlowRegistry.
+                  </p>
+                </div>
+              )}
               <div className="space-y-2">
                 <Label htmlFor="paymentTokenAddress">Token address (optional)</Label>
                 <Input

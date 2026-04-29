@@ -2,10 +2,10 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createElement, type ReactNode } from "react";
 
 import DashboardPage from "@/app/dashboard/page";
+import { renderWithProviders } from "@/test/render-with-providers";
 
 const replaceMock = vi.fn();
 const pushMock = vi.fn();
@@ -108,10 +108,30 @@ vi.mock("@/hooks/use-freelancer-dashboard-query", () => ({
   }),
 }));
 
-function renderWithQueryClient(node: ReactNode) {
-  const queryClient = new QueryClient();
-  return render(createElement(QueryClientProvider, { client: queryClient }, node));
-}
+vi.mock("wagmi", async () => {
+  const actual = await vi.importActual<typeof import("wagmi")>("wagmi");
+  return {
+    ...actual,
+    usePublicClient: () => null,
+  };
+});
+
+vi.mock("@/lib/contracts/roles", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/contracts/roles")>(
+    "@/lib/contracts/roles",
+  );
+  return {
+    ...actual,
+    useContractRoles: () => ({
+      isContractAdmin: false,
+      isPauser: false,
+      isArbitrator: false,
+      isLoading: false,
+      error: null,
+      warnings: [],
+    }),
+  };
+});
 
 describe("DashboardPage summaries", () => {
   beforeEach(() => {
@@ -126,7 +146,7 @@ describe("DashboardPage summaries", () => {
   });
 
   it("renders client summary cards from dashboard payload", async () => {
-    renderWithQueryClient(createElement(DashboardPage));
+    renderWithProviders(createElement(DashboardPage), { includePauseProvider: true });
 
     expect(await screen.findByText("Active projects")).toBeInTheDocument();
     expect(screen.getByText("Pending milestone reviews")).toBeInTheDocument();
@@ -136,7 +156,7 @@ describe("DashboardPage summaries", () => {
 
   it("renders freelancer summary cards when user is freelancer-only", async () => {
     dashboardPageTest.setRoles(["FREELANCER"]);
-    renderWithQueryClient(createElement(DashboardPage));
+    renderWithProviders(createElement(DashboardPage), { includePauseProvider: true });
 
     expect(
       screen.queryByText("Dashboard is not available for this role"),
@@ -148,7 +168,7 @@ describe("DashboardPage summaries", () => {
 
   it("renders admin content in shared dashboard layout", async () => {
     dashboardPageTest.setRoles(["ADMIN"]);
-    renderWithQueryClient(createElement(DashboardPage));
+    renderWithProviders(createElement(DashboardPage), { includePauseProvider: true });
 
     expect(await screen.findByText("Admin operations")).toBeInTheDocument();
     expect(screen.getByText("Dispute lane")).toBeInTheDocument();

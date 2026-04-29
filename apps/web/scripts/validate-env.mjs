@@ -2,12 +2,31 @@ import { z } from "zod";
 import fs from "node:fs";
 import path from "node:path";
 
-const CANONICAL_CHAIN_ID = 421614;
-const CANONICAL_ESCROW_REGISTRY_ADDRESS =
-  "0xe5af7e2cf6435de6b0a0520518fcaaab851bb40c";
-const CANONICAL_DEPLOYMENT_BLOCK = 263614332;
 const DEPRECATED_ESCROW_REGISTRY_ADDRESS =
   "0x268993a0e0342972a52c58aa2dd1a9953fd57acf";
+const deploymentMetadataPath = path.resolve(
+  process.cwd(),
+  "config/deployment-metadata.json",
+);
+const deploymentMetadata = JSON.parse(
+  fs.readFileSync(deploymentMetadataPath, "utf8"),
+);
+const CANONICAL_CHAIN_ID = Number(deploymentMetadata.chainId);
+const CANONICAL_ESCROW_REGISTRY_ADDRESS = String(
+  deploymentMetadata.contracts?.EscrowFlowRegistry ?? "",
+).toLowerCase();
+const CANONICAL_DEPLOYMENT_BLOCK = Number(deploymentMetadata.deploymentBlock);
+
+if (
+  !Number.isInteger(CANONICAL_CHAIN_ID) ||
+  !/^0x[a-f0-9]{40}$/.test(CANONICAL_ESCROW_REGISTRY_ADDRESS) ||
+  !Number.isInteger(CANONICAL_DEPLOYMENT_BLOCK)
+) {
+  console.error(
+    "Invalid canonical deployment metadata in apps/web/config/deployment-metadata.json",
+  );
+  process.exit(1);
+}
 
 loadEnvFile(path.resolve(process.cwd(), ".env.local"));
 loadEnvFile(path.resolve(process.cwd(), "../../.env"));
@@ -39,6 +58,12 @@ const schema = z.object({
   EVENT_SYNC_TRIGGER_TOKEN: z
     .string()
     .min(16, "EVENT_SYNC_TRIGGER_TOKEN should be at least 16 chars")
+    .optional(),
+  CONTRACTS_ESCROW_REGISTRY_ADDRESS: z
+    .string()
+    .trim()
+    .regex(/^0x[a-fA-F0-9]{40}$/, "CONTRACTS_ESCROW_REGISTRY_ADDRESS must be a valid EVM address")
+    .transform((v) => v.toLowerCase())
     .optional(),
 });
 
@@ -98,6 +123,16 @@ if (process.env.NODE_ENV === "production") {
 if (parsed.data.EVENT_SYNC_CONTRACT_ADDRESS !== CANONICAL_ESCROW_REGISTRY_ADDRESS) {
   console.error(
     "Environment validation failed for apps/web:\n- EVENT_SYNC_CONTRACT_ADDRESS: must match canonical EscrowFlowRegistry",
+  );
+  process.exit(1);
+}
+
+if (
+  parsed.data.CONTRACTS_ESCROW_REGISTRY_ADDRESS &&
+  parsed.data.CONTRACTS_ESCROW_REGISTRY_ADDRESS !== CANONICAL_ESCROW_REGISTRY_ADDRESS
+) {
+  console.error(
+    "Environment validation failed for apps/web:\n- CONTRACTS_ESCROW_REGISTRY_ADDRESS: must match canonical EscrowFlowRegistry",
   );
   process.exit(1);
 }

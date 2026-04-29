@@ -7,10 +7,11 @@ import {
   ProjectVisibility,
   Prisma,
   SubmissionStatus,
+  TransactionLogSourceType,
 } from "@prisma/client";
-import { createPublicClient, decodeEventLog, getAddress, http, type Log } from "viem";
+import { createPublicClient, decodeEventLog, getAddress, http, keccak256, stringToHex, type Log } from "viem";
 
-import { prisma } from "@/lib/prisma";
+import { prisma, prismaInteractiveTransactionOptions } from "@/lib/prisma";
 import { escrowRegistryAbi } from "@/lib/contracts/escrow-registry-abi.full";
 import { createLogger } from "@/server/logging/logger";
 import { getEventSyncEnv } from "@/server/event-sync/env";
@@ -19,6 +20,7 @@ import { milestoneFundingSyncUpdates } from "@/server/services/funding-service";
 const DEPRECATED_ESCROW_REGISTRY_ADDRESS =
   "0x268993a0e0342972a52c58aa2dd1a9953fd57acf";
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as const;
+const ARBITRATOR_ROLE = keccak256(stringToHex("ARBITRATOR_ROLE")).toLowerCase();
 
 export const REQUIRED_EVENT_NAMES = [
   "ProjectCreated",
@@ -41,6 +43,11 @@ export const REQUIRED_EVENT_NAMES = [
   "AlternativeRecipientExecuted",
   "ArbitratorThresholdUpdated",
   "ArbitratorActionConfirmed",
+  "RoleAdminChanged",
+  "RoleGranted",
+  "RoleRevoked",
+  "Paused",
+  "Unpaused",
 ] as const;
 
 export const OPTIONAL_EVENT_NAMES = ["EmergencyDisputeResolutionNonceAdvanced"] as const;
@@ -78,6 +85,18 @@ export type EventSyncRunResult = {
   checkpointLogIndex: number | null;
 };
 
+export type ContractPauseSnapshot = {
+  chainId: number;
+  contractAddress: string;
+  paused: boolean;
+  eventName: "Paused" | "Unpaused";
+  updatedBy: string | null;
+  lastChangedBlock: string;
+  lastChangedTxHash: string;
+  lastChangedLogIndex: number;
+  lastChangedAt: string | null;
+} | null;
+
 export async function syncEscrowEventsOnce(): Promise<EventSyncRunResult> {
   const env = getEventSyncEnv();
   const logger = createLogger("event-sync.escrow");
@@ -95,9 +114,24 @@ export async function syncEscrowEventsOnce(): Promise<EventSyncRunResult> {
   const safeHead = await getSafeHeadBlock(client, env.EVENT_SYNC_CONFIRMATIONS);
   const checkpoint = await prisma.eventSyncCheckpoint.findUnique({
     where: { chainId_scope: { chainId, scope } },
-    select: { lastProcessedBlock: true, lastProcessedLogIndex: true, cursorState: true },
+    select: {
+      lastProcessedBlock: true,
+      lastProcessedBlockHash: true,
+      lastProcessedLogIndex: true,
+      cursorState: true,
+    },
   });
-  const cursor = deriveCursor(checkpoint, env.EVENT_SYNC_START_BLOCK);
+  const normalizedCheckpoint = await ensureCheckpointConsistency({
+    client,
+    env,
+    chainId,
+    scope,
+    contractAddress,
+    safeHead,
+    checkpoint,
+    logger,
+  });
+  const cursor = deriveCursor(normalizedCheckpoint, env.EVENT_SYNC_START_BLOCK);
   if (cursor.fromBlock > safeHead) {
     return {
       chainId,
@@ -108,8 +142,8 @@ export async function syncEscrowEventsOnce(): Promise<EventSyncRunResult> {
       processedEvents: 0,
       processedProjectCreated: 0,
       processedProjectFunded: 0,
-      checkpointBlock: checkpoint?.lastProcessedBlock.toString() ?? null,
-      checkpointLogIndex: checkpoint?.lastProcessedLogIndex ?? null,
+      checkpointBlock: normalizedCheckpoint?.lastProcessedBlock.toString() ?? null,
+      checkpointLogIndex: normalizedCheckpoint?.lastProcessedLogIndex ?? null,
     };
   }
 
@@ -126,10 +160,10 @@ export async function syncEscrowEventsOnce(): Promise<EventSyncRunResult> {
           contractAddress,
           cursor.fromBlock,
           toBlock,
-          checkpoint
+          normalizedCheckpoint
             ? {
-                blockNumber: checkpoint.lastProcessedBlock,
-                logIndex: checkpoint.lastProcessedLogIndex,
+                blockNumber: normalizedCheckpoint.lastProcessedBlock,
+                logIndex: normalizedCheckpoint.lastProcessedLogIndex,
               }
             : null,
         ),
@@ -143,8 +177,8 @@ export async function syncEscrowEventsOnce(): Promise<EventSyncRunResult> {
     let processedProjectFunded = 0;
     let lastCheckpointLogIndex: number | null = null;
     let lastCheckpointBlock: bigint = toBlock;
-    let projectionState: ProjectionState = isJsonObject(checkpoint?.cursorState)
-      ? checkpoint.cursorState
+    let projectionState: ProjectionState = isJsonObject(normalizedCheckpoint?.cursorState)
+      ? normalizedCheckpoint.cursorState
       : {};
 
     for (const eventLog of orderedLogs) {
@@ -195,6 +229,7 @@ export async function syncEscrowEventsOnce(): Promise<EventSyncRunResult> {
           update: {
             blockNumber: eventLog.blockNumber,
             eventName: eventLog.name,
+            sourceType: TransactionLogSourceType.chain_event,
             projectId,
             payload: toTxPayload(eventLog, blockDate),
           },
@@ -204,6 +239,7 @@ export async function syncEscrowEventsOnce(): Promise<EventSyncRunResult> {
             txHash: eventLog.txHash.toLowerCase(),
             logIndex: eventLog.logIndex,
             eventName: eventLog.name,
+            sourceType: TransactionLogSourceType.chain_event,
             projectId,
             fromAddress: inferFromAddress(eventLog),
             toAddress: contractAddress.toLowerCase(),
@@ -308,6 +344,227 @@ function deriveCursor(
     return { fromBlock: checkpoint.lastProcessedBlock + 1n };
   }
   return { fromBlock: checkpoint.lastProcessedBlock };
+}
+
+async function ensureCheckpointConsistency(input: {
+  client: ReturnType<typeof createPublicClient>;
+  env: EventSyncEnvLike;
+  chainId: number;
+  scope: string;
+  contractAddress: `0x${string}`;
+  safeHead: bigint;
+  checkpoint: {
+    lastProcessedBlock: bigint;
+    lastProcessedBlockHash: string | null;
+    lastProcessedLogIndex: number | null;
+    cursorState: Prisma.JsonValue | null;
+  } | null;
+  logger: ReturnType<typeof createLogger>;
+}): Promise<{
+  lastProcessedBlock: bigint;
+  lastProcessedBlockHash: string | null;
+  lastProcessedLogIndex: number | null;
+  cursorState: Prisma.JsonValue | null;
+} | null> {
+  const { checkpoint, safeHead, client } = input;
+  if (!checkpoint || !checkpoint.lastProcessedBlockHash) {
+    return checkpoint;
+  }
+  if (checkpoint.lastProcessedBlock > safeHead) {
+    return checkpoint;
+  }
+  const chainBlock = await client.getBlock({ blockNumber: checkpoint.lastProcessedBlock });
+  if (!isBlockHashMismatch(checkpoint.lastProcessedBlockHash, chainBlock.hash ?? null)) {
+    return checkpoint;
+  }
+
+  const rewindFromBlock = computeRewindFromBlock({
+    startBlock: input.env.EVENT_SYNC_START_BLOCK,
+    lastProcessedBlock: checkpoint.lastProcessedBlock,
+    rewindDepth: input.env.EVENT_SYNC_REWIND_DEPTH,
+  });
+  input.logger.warn("Detected reorg mismatch; rewinding checkpoint", {
+    chainId: input.chainId,
+    scope: input.scope,
+    lastProcessedBlock: checkpoint.lastProcessedBlock.toString(),
+    storedHash: checkpoint.lastProcessedBlockHash,
+    chainHash: chainBlock.hash ?? null,
+    rewindFromBlock: rewindFromBlock.toString(),
+  });
+
+  return prisma.$transaction(
+    async (tx) => {
+      const rebuilt = await rewindAndRebuildProjections(tx, {
+        chainId: input.chainId,
+        scope: input.scope,
+        contractAddress: input.contractAddress,
+        startBlock: BigInt(input.env.EVENT_SYNC_START_BLOCK),
+        rewindFromBlock,
+      });
+      return rebuilt;
+    },
+    prismaInteractiveTransactionOptions,
+  );
+}
+
+type EventSyncEnvLike = {
+  EVENT_SYNC_START_BLOCK: number;
+  EVENT_SYNC_REWIND_DEPTH: number;
+};
+
+function computeRewindFromBlock(input: {
+  startBlock: number;
+  lastProcessedBlock: bigint;
+  rewindDepth: number;
+}): bigint {
+  const start = BigInt(input.startBlock);
+  const depth = BigInt(Math.max(1, input.rewindDepth));
+  const candidate = input.lastProcessedBlock - depth;
+  return candidate > start ? candidate : start;
+}
+
+function isBlockHashMismatch(storedHash: string | null, chainHash: string | null): boolean {
+  if (!storedHash || !chainHash) return false;
+  return storedHash.toLowerCase() !== chainHash.toLowerCase();
+}
+
+async function rewindAndRebuildProjections(
+  tx: Prisma.TransactionClient,
+  input: {
+    chainId: number;
+    scope: string;
+    contractAddress: `0x${string}`;
+    startBlock: bigint;
+    rewindFromBlock: bigint;
+  },
+): Promise<{
+  lastProcessedBlock: bigint;
+  lastProcessedBlockHash: string | null;
+  lastProcessedLogIndex: number | null;
+  cursorState: Prisma.JsonValue | null;
+}> {
+  const contractAddressLower = input.contractAddress.toLowerCase();
+  await tx.transactionLog.deleteMany({
+    where: {
+      chainId: input.chainId,
+      sourceType: TransactionLogSourceType.chain_event,
+      toAddress: contractAddressLower,
+      blockNumber: { gte: input.rewindFromBlock },
+    },
+  });
+
+  // Projection tables are deterministic from chain events; rebuild from retained logs.
+  await tx.$executeRaw(
+    Prisma.sql`
+      DELETE FROM "contract_pause_states"
+      WHERE "chainId" = ${input.chainId} AND "contractAddress" = ${contractAddressLower}
+    `,
+  );
+  await tx.$executeRaw(
+    Prisma.sql`
+      DELETE FROM "emergency_resolution_proposals"
+      WHERE "chainId" = ${input.chainId} AND "contractAddress" = ${contractAddressLower}
+    `,
+  );
+  await tx.$executeRaw(
+    Prisma.sql`
+      DELETE FROM "alternative_recipient_states"
+      WHERE "chainId" = ${input.chainId} AND "contractAddress" = ${contractAddressLower}
+    `,
+  );
+  await tx.$executeRaw(
+    Prisma.sql`
+      DELETE FROM "token_governance_states"
+      WHERE "chainId" = ${input.chainId} AND "contractAddress" = ${contractAddressLower}
+    `,
+  );
+  await tx.$executeRaw(
+    Prisma.sql`
+      DELETE FROM "role_membership_states"
+      WHERE "chainId" = ${input.chainId} AND "contractAddress" = ${contractAddressLower}
+    `,
+  );
+  await tx.$executeRaw(
+    Prisma.sql`
+      DELETE FROM "role_governance_events"
+      WHERE "chainId" = ${input.chainId} AND "contractAddress" = ${contractAddressLower}
+    `,
+  );
+  await tx.$executeRaw(
+    Prisma.sql`
+      DELETE FROM "arbitrator_governance_states"
+      WHERE "chainId" = ${input.chainId} AND "contractAddress" = ${contractAddressLower}
+    `,
+  );
+  await tx.$executeRaw(
+    Prisma.sql`
+      DELETE FROM "arbitrator_threshold_histories"
+      WHERE "chainId" = ${input.chainId} AND "contractAddress" = ${contractAddressLower}
+    `,
+  );
+
+  const retainedLogs = await tx.transactionLog.findMany({
+    where: {
+      chainId: input.chainId,
+      sourceType: TransactionLogSourceType.chain_event,
+      toAddress: contractAddressLower,
+      blockNumber: { gte: input.startBlock, lt: input.rewindFromBlock },
+    },
+    select: {
+      eventName: true,
+      blockNumber: true,
+      txHash: true,
+      logIndex: true,
+      payload: true,
+    },
+    orderBy: [{ blockNumber: "asc" }, { logIndex: "asc" }],
+  });
+
+  let cursorState: ProjectionState = {};
+  let lastProcessedBlock = input.startBlock > 0n ? input.startBlock - 1n : 0n;
+  for (const row of retainedLogs) {
+    const eventLog = parseStoredChainEventLog(row);
+    if (!eventLog) continue;
+    const blockDate = readBlockTimestampFromPayload(row.payload);
+    await replayProjectionFromStoredLog(tx, {
+      chainId: input.chainId,
+      contractAddress: input.contractAddress,
+      eventLog,
+      blockDate,
+    });
+    cursorState = mergeProjectionState(cursorState, reduceProjectionState(eventLog));
+    lastProcessedBlock = row.blockNumber;
+  }
+
+  const lastProcessedLogIndex = null;
+  await tx.eventSyncCheckpoint.upsert({
+    where: { chainId_scope: { chainId: input.chainId, scope: input.scope } },
+    update: {
+      lastProcessedBlock,
+      lastProcessedBlockHash: null,
+      lastProcessedLogIndex,
+      cursorState,
+      lastError: null,
+      lastSuccessAt: new Date(),
+    },
+    create: {
+      chainId: input.chainId,
+      scope: input.scope,
+      lastProcessedBlock,
+      lastProcessedBlockHash: null,
+      lastProcessedLogIndex,
+      cursorState,
+      lastError: null,
+      lastSuccessAt: new Date(),
+    },
+  });
+
+  return {
+    lastProcessedBlock,
+    lastProcessedBlockHash: null,
+    lastProcessedLogIndex,
+    cursorState,
+  };
 }
 
 async function getSafeHeadBlock(
@@ -589,15 +846,64 @@ async function applyEventProjection(
     };
   }
   if (eventLog.name === "DisputeResolved" || eventLog.name === "EmergencyDisputeResolved") {
+    if (eventLog.name === "EmergencyDisputeResolved") {
+      await syncEmergencyResolutionProposal(tx, chainId, contractAddress, eventLog);
+    }
+    await syncAlternativeRecipientState(tx, chainId, contractAddress, eventLog);
     return {
       projectId: await syncDisputeResolved(tx, chainId, contractAddress, eventLog, blockDate),
       statePatch: {},
     };
   }
   if (eventLog.name === "ProjectCancelled" || eventLog.name === "ProjectEmergencyCancelled") {
+    await syncAlternativeRecipientState(tx, chainId, contractAddress, eventLog);
     return {
       projectId: await syncProjectCancelled(tx, chainId, contractAddress, eventLog, blockDate),
       statePatch: {},
+    };
+  }
+  if (eventLog.name === "AlternativeRecipientSet" || eventLog.name === "AlternativeRecipientExecuted") {
+    const projectId = await syncAlternativeRecipientState(tx, chainId, contractAddress, eventLog);
+    return {
+      projectId,
+      statePatch: reduceProjectionState(eventLog),
+    };
+  }
+  if (
+    eventLog.name === "EmergencyDisputeResolutionProposed" ||
+    eventLog.name === "EmergencyDisputeResolutionCancelled" ||
+    eventLog.name === "EmergencyDisputeResolutionNonceAdvanced"
+  ) {
+    const projectId = await syncEmergencyResolutionProposal(tx, chainId, contractAddress, eventLog);
+    return {
+      projectId,
+      statePatch: reduceProjectionState(eventLog),
+    };
+  }
+  if (eventLog.name === "TokenReviewAttested" || eventLog.name === "AllowedTokenUpdated") {
+    await syncTokenGovernanceState(tx, chainId, contractAddress, eventLog);
+    return {
+      projectId: null,
+      statePatch: reduceProjectionState(eventLog),
+    };
+  }
+  if (
+    eventLog.name === "RoleGranted" ||
+    eventLog.name === "RoleRevoked" ||
+    eventLog.name === "RoleAdminChanged" ||
+    eventLog.name === "ArbitratorThresholdUpdated"
+  ) {
+    await syncRoleAndArbitratorGovernanceState(tx, chainId, contractAddress, eventLog);
+    return {
+      projectId: null,
+      statePatch: reduceProjectionState(eventLog),
+    };
+  }
+  if (eventLog.name === "Paused" || eventLog.name === "Unpaused") {
+    await syncPauseStateProjection(tx, chainId, contractAddress, eventLog, blockDate);
+    return {
+      projectId: null,
+      statePatch: reduceProjectionState(eventLog),
     };
   }
   return {
@@ -935,7 +1241,754 @@ async function syncProjectCancelled(
   return project.id;
 }
 
+async function syncPauseStateProjection(
+  tx: Prisma.TransactionClient,
+  chainId: number,
+  contractAddress: `0x${string}`,
+  eventLog: SupportedEventLog,
+  blockDate: Date | null,
+): Promise<void> {
+  const paused = eventLog.name === "Paused";
+  const updatedBy = asAddress(eventLog.args.account).toLowerCase();
+  await tx.$executeRaw(
+    Prisma.sql`
+      INSERT INTO "contract_pause_states" (
+        "id",
+        "chainId",
+        "contractAddress",
+        "paused",
+        "eventName",
+        "updatedBy",
+        "lastChangedBlock",
+        "lastChangedTxHash",
+        "lastChangedLogIndex",
+        "lastChangedAt",
+        "createdAt",
+        "updatedAt"
+      ) VALUES (
+        ${`${chainId}:${contractAddress.toLowerCase()}:${eventLog.txHash.toLowerCase()}:${eventLog.logIndex}`},
+        ${chainId},
+        ${contractAddress.toLowerCase()},
+        ${paused},
+        ${eventLog.name},
+        ${updatedBy},
+        ${eventLog.blockNumber},
+        ${eventLog.txHash.toLowerCase()},
+        ${eventLog.logIndex},
+        ${blockDate ?? null},
+        NOW(),
+        NOW()
+      )
+      ON CONFLICT ("chainId", "contractAddress")
+      DO UPDATE SET
+        "paused" = EXCLUDED."paused",
+        "eventName" = EXCLUDED."eventName",
+        "updatedBy" = EXCLUDED."updatedBy",
+        "lastChangedBlock" = EXCLUDED."lastChangedBlock",
+        "lastChangedTxHash" = EXCLUDED."lastChangedTxHash",
+        "lastChangedLogIndex" = EXCLUDED."lastChangedLogIndex",
+        "lastChangedAt" = EXCLUDED."lastChangedAt",
+        "updatedAt" = NOW()
+    `,
+  );
+}
+
+async function syncEmergencyResolutionProposal(
+  tx: Prisma.TransactionClient,
+  chainId: number,
+  contractAddress: `0x${string}`,
+  eventLog: SupportedEventLog,
+): Promise<string | null> {
+  const projectIdBigInt = asBigInt(eventLog.args.projectId);
+  const milestoneIndexBigInt = asBigInt(eventLog.args.milestoneIndex);
+  const projectDb = await findProjectByOnChainId(
+    tx,
+    chainId,
+    contractAddress,
+    projectIdBigInt,
+  );
+  const projectDbId = projectDb?.id ?? null;
+  const projectId = projectIdBigInt.toString();
+  const milestoneIndex = Number(milestoneIndexBigInt);
+  const contractAddressLower = contractAddress.toLowerCase();
+  const txHashLower = eventLog.txHash.toLowerCase();
+
+  if (eventLog.name === "EmergencyDisputeResolutionProposed") {
+    const readyAtSeconds = Number(asBigInt(eventLog.args.readyAt));
+    const readyAt = Number.isFinite(readyAtSeconds) && readyAtSeconds > 0
+      ? new Date(readyAtSeconds * 1000)
+      : null;
+    await tx.emergencyResolutionProposal.upsert({
+      where: {
+        chainId_txHash_logIndex: {
+          chainId,
+          txHash: txHashLower,
+          logIndex: eventLog.logIndex,
+        },
+      },
+      update: {
+        contractAddress: contractAddressLower,
+        projectDbId,
+        projectId,
+        milestoneIndex,
+        actionHash: asString(eventLog.args.actionHash),
+        kind: Number(asBigInt(eventLog.args.resolutionKind)),
+        freelancerAmount: asBigInt(eventLog.args.freelancerAmount).toString(),
+        clientAmount: asBigInt(eventLog.args.clientAmount).toString(),
+        readyAt,
+        status: "proposed",
+      },
+      create: {
+        chainId,
+        contractAddress: contractAddressLower,
+        projectDbId,
+        projectId,
+        milestoneIndex,
+        actionHash: asString(eventLog.args.actionHash),
+        kind: Number(asBigInt(eventLog.args.resolutionKind)),
+        freelancerAmount: asBigInt(eventLog.args.freelancerAmount).toString(),
+        clientAmount: asBigInt(eventLog.args.clientAmount).toString(),
+        readyAt,
+        status: "proposed",
+        txHash: txHashLower,
+        logIndex: eventLog.logIndex,
+      },
+    });
+    return projectDbId;
+  }
+
+  if (eventLog.name === "EmergencyDisputeResolutionCancelled") {
+    const actionHash = asString(eventLog.args.actionHash);
+    if (actionHash) {
+      await tx.emergencyResolutionProposal.updateMany({
+        where: {
+          chainId,
+          contractAddress: contractAddressLower,
+          projectId,
+          milestoneIndex,
+          actionHash,
+          status: "proposed",
+        },
+        data: {
+          status: "cancelled",
+        },
+      });
+    }
+    await tx.emergencyResolutionProposal.upsert({
+      where: {
+        chainId_txHash_logIndex: {
+          chainId,
+          txHash: txHashLower,
+          logIndex: eventLog.logIndex,
+        },
+      },
+      update: {
+        contractAddress: contractAddressLower,
+        projectDbId,
+        projectId,
+        milestoneIndex,
+        actionHash: actionHash || null,
+        status: "cancelled",
+      },
+      create: {
+        chainId,
+        contractAddress: contractAddressLower,
+        projectDbId,
+        projectId,
+        milestoneIndex,
+        actionHash: actionHash || null,
+        kind: null,
+        freelancerAmount: null,
+        clientAmount: null,
+        readyAt: null,
+        status: "cancelled",
+        txHash: txHashLower,
+        logIndex: eventLog.logIndex,
+      },
+    });
+    return projectDbId;
+  }
+
+  if (eventLog.name === "EmergencyDisputeResolved") {
+    await tx.emergencyResolutionProposal.updateMany({
+      where: {
+        chainId,
+        contractAddress: contractAddressLower,
+        projectId,
+        milestoneIndex,
+        status: "proposed",
+      },
+      data: {
+        status: "executed",
+      },
+    });
+    await tx.emergencyResolutionProposal.upsert({
+      where: {
+        chainId_txHash_logIndex: {
+          chainId,
+          txHash: txHashLower,
+          logIndex: eventLog.logIndex,
+        },
+      },
+      update: {
+        contractAddress: contractAddressLower,
+        projectDbId,
+        projectId,
+        milestoneIndex,
+        kind: Number(asBigInt(eventLog.args.resolutionKind)),
+        freelancerAmount: asBigInt(eventLog.args.freelancerAmount).toString(),
+        clientAmount: asBigInt(eventLog.args.clientAmount).toString(),
+        readyAt: null,
+        status: "executed",
+      },
+      create: {
+        chainId,
+        contractAddress: contractAddressLower,
+        projectDbId,
+        projectId,
+        milestoneIndex,
+        actionHash: null,
+        kind: Number(asBigInt(eventLog.args.resolutionKind)),
+        freelancerAmount: asBigInt(eventLog.args.freelancerAmount).toString(),
+        clientAmount: asBigInt(eventLog.args.clientAmount).toString(),
+        readyAt: null,
+        status: "executed",
+        txHash: txHashLower,
+        logIndex: eventLog.logIndex,
+      },
+    });
+    return projectDbId;
+  }
+
+  // EmergencyDisputeResolutionNonceAdvanced invalidates pending proposals.
+  await tx.emergencyResolutionProposal.updateMany({
+    where: {
+      chainId,
+      contractAddress: contractAddressLower,
+      projectId,
+      milestoneIndex,
+      status: "proposed",
+    },
+    data: {
+      status: "invalidated",
+    },
+  });
+  await tx.emergencyResolutionProposal.upsert({
+    where: {
+      chainId_txHash_logIndex: {
+        chainId,
+        txHash: txHashLower,
+        logIndex: eventLog.logIndex,
+      },
+    },
+    update: {
+      contractAddress: contractAddressLower,
+      projectDbId,
+      projectId,
+      milestoneIndex,
+      status: "invalidated",
+    },
+    create: {
+      chainId,
+      contractAddress: contractAddressLower,
+      projectDbId,
+      projectId,
+      milestoneIndex,
+      actionHash: null,
+      kind: null,
+      freelancerAmount: null,
+      clientAmount: null,
+      readyAt: null,
+      status: "invalidated",
+      txHash: txHashLower,
+      logIndex: eventLog.logIndex,
+    },
+  });
+  return projectDbId;
+}
+
+async function syncAlternativeRecipientState(
+  tx: Prisma.TransactionClient,
+  chainId: number,
+  contractAddress: `0x${string}`,
+  eventLog: SupportedEventLog,
+): Promise<string | null> {
+  const contractAddressLower = contractAddress.toLowerCase();
+  const txHashLower = eventLog.txHash.toLowerCase();
+  const projectId = asBigInt(eventLog.args.projectId).toString();
+  const projectDb = await findProjectByOnChainId(tx, chainId, contractAddress, asBigInt(eventLog.args.projectId));
+  const projectDbId = projectDb?.id ?? null;
+
+  if (eventLog.name === "AlternativeRecipientSet" || eventLog.name === "AlternativeRecipientExecuted") {
+    const milestoneIndex = Number(asBigInt(eventLog.args.milestoneIndex));
+    const isFreelancer = Boolean(eventLog.args.isFreelancer);
+    const recipient = asAddress(eventLog.args.recipient).toLowerCase();
+    const executableAfter = asBigInt(eventLog.args.executableAfter);
+
+    if (eventLog.name === "AlternativeRecipientSet") {
+      const isZeroRecipient = recipient === ZERO_ADDRESS;
+      const isPartyAuthorized = executableAfter === 0n;
+      await tx.alternativeRecipientState.upsert({
+        where: {
+          chainId_contractAddress_projectId_milestoneIndex_isFreelancer: {
+            chainId,
+            contractAddress: contractAddressLower,
+            projectId,
+            milestoneIndex,
+            isFreelancer,
+          },
+        },
+        update: {
+          projectDbId,
+          pendingRecipient: !isPartyAuthorized && !isZeroRecipient ? recipient : null,
+          executableAfter: !isPartyAuthorized && !isZeroRecipient ? executableAfter : null,
+          activeRecipient: null,
+          partyAuthorizedRecipient: isPartyAuthorized && !isZeroRecipient ? recipient : null,
+          status: !isPartyAuthorized && !isZeroRecipient ? "pending" : "cleared",
+          updatedAtBlock: eventLog.blockNumber,
+          updatedAtTxHash: txHashLower,
+          updatedAtLogIndex: eventLog.logIndex,
+        },
+        create: {
+          chainId,
+          contractAddress: contractAddressLower,
+          projectDbId,
+          projectId,
+          milestoneIndex,
+          isFreelancer,
+          pendingRecipient: !isPartyAuthorized && !isZeroRecipient ? recipient : null,
+          executableAfter: !isPartyAuthorized && !isZeroRecipient ? executableAfter : null,
+          activeRecipient: null,
+          partyAuthorizedRecipient: isPartyAuthorized && !isZeroRecipient ? recipient : null,
+          status: !isPartyAuthorized && !isZeroRecipient ? "pending" : "cleared",
+          updatedAtBlock: eventLog.blockNumber,
+          updatedAtTxHash: txHashLower,
+          updatedAtLogIndex: eventLog.logIndex,
+        },
+      });
+      return projectDbId;
+    }
+
+    await tx.alternativeRecipientState.upsert({
+      where: {
+        chainId_contractAddress_projectId_milestoneIndex_isFreelancer: {
+          chainId,
+          contractAddress: contractAddressLower,
+          projectId,
+          milestoneIndex,
+          isFreelancer,
+        },
+      },
+      update: {
+        projectDbId,
+        pendingRecipient: null,
+        executableAfter: null,
+        activeRecipient: recipient === ZERO_ADDRESS ? null : recipient,
+        status: recipient === ZERO_ADDRESS ? "cleared" : "active",
+        updatedAtBlock: eventLog.blockNumber,
+        updatedAtTxHash: txHashLower,
+        updatedAtLogIndex: eventLog.logIndex,
+      },
+      create: {
+        chainId,
+        contractAddress: contractAddressLower,
+        projectDbId,
+        projectId,
+        milestoneIndex,
+        isFreelancer,
+        pendingRecipient: null,
+        executableAfter: null,
+        activeRecipient: recipient === ZERO_ADDRESS ? null : recipient,
+        partyAuthorizedRecipient: null,
+        status: recipient === ZERO_ADDRESS ? "cleared" : "active",
+        updatedAtBlock: eventLog.blockNumber,
+        updatedAtTxHash: txHashLower,
+        updatedAtLogIndex: eventLog.logIndex,
+      },
+    });
+    return projectDbId;
+  }
+
+  if (eventLog.name === "DisputeResolved" || eventLog.name === "EmergencyDisputeResolved") {
+    const milestoneIndex = Number(asBigInt(eventLog.args.milestoneIndex));
+    for (const isFreelancer of [true, false]) {
+      await tx.alternativeRecipientState.upsert({
+        where: {
+          chainId_contractAddress_projectId_milestoneIndex_isFreelancer: {
+            chainId,
+            contractAddress: contractAddressLower,
+            projectId,
+            milestoneIndex,
+            isFreelancer,
+          },
+        },
+        update: {
+          projectDbId,
+          pendingRecipient: null,
+          executableAfter: null,
+          activeRecipient: null,
+          partyAuthorizedRecipient: null,
+          status: "cleared",
+          updatedAtBlock: eventLog.blockNumber,
+          updatedAtTxHash: txHashLower,
+          updatedAtLogIndex: eventLog.logIndex,
+        },
+        create: {
+          chainId,
+          contractAddress: contractAddressLower,
+          projectDbId,
+          projectId,
+          milestoneIndex,
+          isFreelancer,
+          pendingRecipient: null,
+          executableAfter: null,
+          activeRecipient: null,
+          partyAuthorizedRecipient: null,
+          status: "cleared",
+          updatedAtBlock: eventLog.blockNumber,
+          updatedAtTxHash: txHashLower,
+          updatedAtLogIndex: eventLog.logIndex,
+        },
+      });
+    }
+    return projectDbId;
+  }
+
+  // Project-level cancellation clears all milestone recipient legs.
+  await tx.alternativeRecipientState.updateMany({
+    where: {
+      chainId,
+      contractAddress: contractAddressLower,
+      projectId,
+    },
+    data: {
+      projectDbId,
+      pendingRecipient: null,
+      executableAfter: null,
+      activeRecipient: null,
+      partyAuthorizedRecipient: null,
+      status: "cleared",
+      updatedAtBlock: eventLog.blockNumber,
+      updatedAtTxHash: txHashLower,
+      updatedAtLogIndex: eventLog.logIndex,
+    },
+  });
+  return projectDbId;
+}
+
+async function syncTokenGovernanceState(
+  tx: Prisma.TransactionClient,
+  chainId: number,
+  contractAddress: `0x${string}`,
+  eventLog: SupportedEventLog,
+): Promise<void> {
+  const token = asAddress(eventLog.args.token).toLowerCase();
+  const contractAddressLower = contractAddress.toLowerCase();
+  const txHashLower = eventLog.txHash.toLowerCase();
+
+  if (eventLog.name === "TokenReviewAttested") {
+    await tx.tokenGovernanceState.upsert({
+      where: {
+        chainId_contractAddress_token: {
+          chainId,
+          contractAddress: contractAddressLower,
+          token,
+        },
+      },
+      update: {
+        reviewed: true,
+        reviewedBy: asAddress(eventLog.args.admin).toLowerCase(),
+        lastUpdatedTxHash: txHashLower,
+        lastUpdatedBlock: eventLog.blockNumber,
+        lastUpdatedLogIndex: eventLog.logIndex,
+      },
+      create: {
+        chainId,
+        contractAddress: contractAddressLower,
+        token,
+        reviewed: true,
+        allowed: false,
+        reviewedBy: asAddress(eventLog.args.admin).toLowerCase(),
+        lastUpdatedTxHash: txHashLower,
+        lastUpdatedBlock: eventLog.blockNumber,
+        lastUpdatedLogIndex: eventLog.logIndex,
+      },
+    });
+    return;
+  }
+
+  await tx.tokenGovernanceState.upsert({
+    where: {
+      chainId_contractAddress_token: {
+        chainId,
+        contractAddress: contractAddressLower,
+        token,
+      },
+    },
+    update: {
+      allowed: Boolean(eventLog.args.allowed),
+      lastUpdatedTxHash: txHashLower,
+      lastUpdatedBlock: eventLog.blockNumber,
+      lastUpdatedLogIndex: eventLog.logIndex,
+    },
+    create: {
+      chainId,
+      contractAddress: contractAddressLower,
+      token,
+      reviewed: false,
+      allowed: Boolean(eventLog.args.allowed),
+      reviewedBy: null,
+      lastUpdatedTxHash: txHashLower,
+      lastUpdatedBlock: eventLog.blockNumber,
+      lastUpdatedLogIndex: eventLog.logIndex,
+    },
+  });
+}
+
+async function syncRoleAndArbitratorGovernanceState(
+  tx: Prisma.TransactionClient,
+  chainId: number,
+  contractAddress: `0x${string}`,
+  eventLog: SupportedEventLog,
+): Promise<void> {
+  const contractAddressLower = contractAddress.toLowerCase();
+  const txHashLower = eventLog.txHash.toLowerCase();
+
+  if (eventLog.name === "RoleGranted" || eventLog.name === "RoleRevoked") {
+    const role = asBytes32(eventLog.args.role).toLowerCase();
+    const account = asAddress(eventLog.args.account).toLowerCase();
+    const sender = asAddress(eventLog.args.sender).toLowerCase();
+    const isActive = eventLog.name === "RoleGranted";
+
+    const existingMembership = await tx.roleMembershipState.findUnique({
+      where: {
+        chainId_contractAddress_role_account: {
+          chainId,
+          contractAddress: contractAddressLower,
+          role,
+          account,
+        },
+      },
+      select: { isActive: true },
+    });
+
+    await tx.roleMembershipState.upsert({
+      where: {
+        chainId_contractAddress_role_account: {
+          chainId,
+          contractAddress: contractAddressLower,
+          role,
+          account,
+        },
+      },
+      update: {
+        isActive,
+        lastUpdatedBy: sender,
+        lastUpdatedTxHash: txHashLower,
+        lastUpdatedBlock: eventLog.blockNumber,
+        lastUpdatedLogIndex: eventLog.logIndex,
+      },
+      create: {
+        chainId,
+        contractAddress: contractAddressLower,
+        role,
+        account,
+        isActive,
+        lastUpdatedBy: sender,
+        lastUpdatedTxHash: txHashLower,
+        lastUpdatedBlock: eventLog.blockNumber,
+        lastUpdatedLogIndex: eventLog.logIndex,
+      },
+    });
+
+    await tx.roleGovernanceEvent.upsert({
+      where: {
+        chainId_txHash_logIndex: {
+          chainId,
+          txHash: txHashLower,
+          logIndex: eventLog.logIndex,
+        },
+      },
+      update: {
+        contractAddress: contractAddressLower,
+        eventType: eventLog.name === "RoleGranted" ? "role_granted" : "role_revoked",
+        role,
+        account,
+        sender,
+        previousAdminRole: null,
+        newAdminRole: null,
+        blockNumber: eventLog.blockNumber,
+      },
+      create: {
+        chainId,
+        contractAddress: contractAddressLower,
+        eventType: eventLog.name === "RoleGranted" ? "role_granted" : "role_revoked",
+        role,
+        account,
+        sender,
+        previousAdminRole: null,
+        newAdminRole: null,
+        txHash: txHashLower,
+        logIndex: eventLog.logIndex,
+        blockNumber: eventLog.blockNumber,
+      },
+    });
+
+    if (role === ARBITRATOR_ROLE && existingMembership?.isActive !== isActive) {
+      const currentState = await tx.arbitratorGovernanceState.findUnique({
+        where: {
+          chainId_contractAddress: {
+            chainId,
+            contractAddress: contractAddressLower,
+          },
+        },
+        select: { arbitratorCount: true, arbitratorThreshold: true },
+      });
+      const nextCount = Math.max(
+        0,
+        (currentState?.arbitratorCount ?? 0) + (isActive ? 1 : -1),
+      );
+      await tx.arbitratorGovernanceState.upsert({
+        where: {
+          chainId_contractAddress: {
+            chainId,
+            contractAddress: contractAddressLower,
+          },
+        },
+        update: {
+          arbitratorCount: nextCount,
+          lastUpdatedTxHash: txHashLower,
+          lastUpdatedBlock: eventLog.blockNumber,
+          lastUpdatedLogIndex: eventLog.logIndex,
+        },
+        create: {
+          chainId,
+          contractAddress: contractAddressLower,
+          arbitratorCount: nextCount,
+          arbitratorThreshold: currentState?.arbitratorThreshold ?? null,
+          lastUpdatedTxHash: txHashLower,
+          lastUpdatedBlock: eventLog.blockNumber,
+          lastUpdatedLogIndex: eventLog.logIndex,
+        },
+      });
+    }
+    return;
+  }
+
+  if (eventLog.name === "RoleAdminChanged") {
+    const role = asBytes32(eventLog.args.role).toLowerCase();
+    const previousAdminRole = asBytes32(eventLog.args.previousAdminRole).toLowerCase();
+    const newAdminRole = asBytes32(eventLog.args.newAdminRole).toLowerCase();
+    await tx.roleGovernanceEvent.upsert({
+      where: {
+        chainId_txHash_logIndex: {
+          chainId,
+          txHash: txHashLower,
+          logIndex: eventLog.logIndex,
+        },
+      },
+      update: {
+        contractAddress: contractAddressLower,
+        eventType: "role_admin_changed",
+        role,
+        account: null,
+        sender: null,
+        previousAdminRole,
+        newAdminRole,
+        blockNumber: eventLog.blockNumber,
+      },
+      create: {
+        chainId,
+        contractAddress: contractAddressLower,
+        eventType: "role_admin_changed",
+        role,
+        account: null,
+        sender: null,
+        previousAdminRole,
+        newAdminRole,
+        txHash: txHashLower,
+        logIndex: eventLog.logIndex,
+        blockNumber: eventLog.blockNumber,
+      },
+    });
+    return;
+  }
+
+  const previousThreshold = asBigInt(eventLog.args.previousThreshold);
+  const newThreshold = asBigInt(eventLog.args.newThreshold);
+  const updatedBy = asAddress(eventLog.args.updatedBy).toLowerCase();
+
+  await tx.arbitratorThresholdHistory.upsert({
+    where: {
+      chainId_txHash_logIndex: {
+        chainId,
+        txHash: txHashLower,
+        logIndex: eventLog.logIndex,
+      },
+    },
+    update: {
+      contractAddress: contractAddressLower,
+      previousThreshold,
+      newThreshold,
+      updatedBy,
+      blockNumber: eventLog.blockNumber,
+    },
+    create: {
+      chainId,
+      contractAddress: contractAddressLower,
+      previousThreshold,
+      newThreshold,
+      updatedBy,
+      txHash: txHashLower,
+      logIndex: eventLog.logIndex,
+      blockNumber: eventLog.blockNumber,
+    },
+  });
+
+  const currentState = await tx.arbitratorGovernanceState.findUnique({
+    where: {
+      chainId_contractAddress: {
+        chainId,
+        contractAddress: contractAddressLower,
+      },
+    },
+    select: { arbitratorCount: true },
+  });
+  await tx.arbitratorGovernanceState.upsert({
+    where: {
+      chainId_contractAddress: {
+        chainId,
+        contractAddress: contractAddressLower,
+      },
+    },
+    update: {
+      arbitratorThreshold: newThreshold,
+      lastUpdatedTxHash: txHashLower,
+      lastUpdatedBlock: eventLog.blockNumber,
+      lastUpdatedLogIndex: eventLog.logIndex,
+    },
+    create: {
+      chainId,
+      contractAddress: contractAddressLower,
+      arbitratorCount: currentState?.arbitratorCount ?? 0,
+      arbitratorThreshold: newThreshold,
+      lastUpdatedTxHash: txHashLower,
+      lastUpdatedBlock: eventLog.blockNumber,
+      lastUpdatedLogIndex: eventLog.logIndex,
+    },
+  });
+}
+
 function reduceProjectionState(eventLog: SupportedEventLog): ProjectionState {
+  if (eventLog.name === "Paused" || eventLog.name === "Unpaused") {
+    return {
+      pauseState: {
+        paused: eventLog.name === "Paused",
+        account: asAddress(eventLog.args.account).toLowerCase(),
+        eventName: eventLog.name,
+      },
+    };
+  }
   if (eventLog.name === "AllowedTokenUpdated") {
     const token = asAddress(eventLog.args.token).toLowerCase();
     const allowed = Boolean(eventLog.args.allowed);
@@ -1155,6 +2208,82 @@ function inferFromAddress(eventLog: SupportedEventLog): string {
   return ZERO_ADDRESS;
 }
 
+function parseStoredChainEventLog(row: {
+  eventName: string;
+  blockNumber: bigint;
+  txHash: string;
+  logIndex: number;
+  payload: Prisma.JsonValue;
+}): SupportedEventLog | null {
+  if (!supportedEventNames.has(row.eventName)) {
+    return null;
+  }
+  const payload = isJsonObject(row.payload) ? row.payload : null;
+  const maybeArgs = payload && isJsonObject(payload.args) ? payload.args : {};
+  return {
+    name: row.eventName as SupportedEventName,
+    blockNumber: row.blockNumber,
+    blockHash: null,
+    txHash: row.txHash as `0x${string}`,
+    logIndex: row.logIndex,
+    args: maybeArgs as Record<string, unknown>,
+  };
+}
+
+function readBlockTimestampFromPayload(payload: Prisma.JsonValue): Date | null {
+  if (!isJsonObject(payload)) return null;
+  const value = payload.blockTimestamp;
+  if (typeof value !== "string" || !value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+async function replayProjectionFromStoredLog(
+  tx: Prisma.TransactionClient,
+  input: {
+    chainId: number;
+    contractAddress: `0x${string}`;
+    eventLog: SupportedEventLog;
+    blockDate: Date | null;
+  },
+): Promise<void> {
+  const { eventLog, chainId, contractAddress, blockDate } = input;
+  if (eventLog.name === "Paused" || eventLog.name === "Unpaused") {
+    await syncPauseStateProjection(tx, chainId, contractAddress, eventLog, blockDate);
+    return;
+  }
+  if (
+    eventLog.name === "EmergencyDisputeResolutionProposed" ||
+    eventLog.name === "EmergencyDisputeResolutionCancelled" ||
+    eventLog.name === "EmergencyDisputeResolutionNonceAdvanced" ||
+    eventLog.name === "EmergencyDisputeResolved"
+  ) {
+    await syncEmergencyResolutionProposal(tx, chainId, contractAddress, eventLog);
+  }
+  if (
+    eventLog.name === "AlternativeRecipientSet" ||
+    eventLog.name === "AlternativeRecipientExecuted" ||
+    eventLog.name === "DisputeResolved" ||
+    eventLog.name === "EmergencyDisputeResolved" ||
+    eventLog.name === "ProjectCancelled" ||
+    eventLog.name === "ProjectEmergencyCancelled"
+  ) {
+    await syncAlternativeRecipientState(tx, chainId, contractAddress, eventLog);
+  }
+  if (eventLog.name === "TokenReviewAttested" || eventLog.name === "AllowedTokenUpdated") {
+    await syncTokenGovernanceState(tx, chainId, contractAddress, eventLog);
+    return;
+  }
+  if (
+    eventLog.name === "RoleGranted" ||
+    eventLog.name === "RoleRevoked" ||
+    eventLog.name === "RoleAdminChanged" ||
+    eventLog.name === "ArbitratorThresholdUpdated"
+  ) {
+    await syncRoleAndArbitratorGovernanceState(tx, chainId, contractAddress, eventLog);
+  }
+}
+
 function asBigInt(value: unknown): bigint {
   return typeof value === "bigint" ? value : 0n;
 }
@@ -1168,6 +2297,13 @@ function asAddress(value: unknown): `0x${string}` {
     return getAddress(value) as `0x${string}`;
   }
   return ZERO_ADDRESS;
+}
+
+function asBytes32(value: unknown): `0x${string}` {
+  if (typeof value === "string" && /^0x[a-fA-F0-9]{64}$/.test(value)) {
+    return value.toLowerCase() as `0x${string}`;
+  }
+  return `0x${"0".repeat(64)}` as `0x${string}`;
 }
 
 function jsonSafeArgs(args: Record<string, unknown>): Prisma.JsonObject {
@@ -1274,8 +2410,72 @@ function deepMergeJsonObjects(
   return out;
 }
 
+function transactionLogUniqueKey(input: {
+  chainId: number;
+  txHash: string;
+  logIndex: number;
+}): string {
+  return `${input.chainId}:${input.txHash.toLowerCase()}:${input.logIndex}`;
+}
+
 export const __eventSyncInternals = {
   shouldApplyProjection,
   mergeProjectionState,
   reduceProjectionState,
+  transactionLogUniqueKey,
+  computeRewindFromBlock,
+  isBlockHashMismatch,
 };
+
+export async function getLatestContractPauseSnapshot(input: {
+  chainId: number;
+  contractAddress: `0x${string}`;
+}): Promise<ContractPauseSnapshot> {
+  const rows = await prisma.$queryRaw<
+    Array<{
+      chainId: number;
+      contractAddress: string;
+      paused: boolean;
+      eventName: string;
+      updatedBy: string | null;
+      lastChangedBlock: bigint;
+      lastChangedTxHash: string;
+      lastChangedLogIndex: number;
+      lastChangedAt: Date | null;
+    }>
+  >(
+    Prisma.sql`
+      SELECT
+        "chainId",
+        "contractAddress",
+        "paused",
+        "eventName",
+        "updatedBy",
+        "lastChangedBlock",
+        "lastChangedTxHash",
+        "lastChangedLogIndex",
+        "lastChangedAt"
+      FROM "contract_pause_states"
+      WHERE "chainId" = ${input.chainId}
+        AND "contractAddress" = ${input.contractAddress.toLowerCase()}
+      LIMIT 1
+    `,
+  );
+
+  const row = rows[0];
+  if (!row) {
+    return null;
+  }
+  const eventName = row.eventName === "Paused" ? "Paused" : "Unpaused";
+  return {
+    chainId: row.chainId,
+    contractAddress: row.contractAddress,
+    paused: row.paused,
+    eventName,
+    updatedBy: row.updatedBy,
+    lastChangedBlock: row.lastChangedBlock.toString(),
+    lastChangedTxHash: row.lastChangedTxHash,
+    lastChangedLogIndex: row.lastChangedLogIndex,
+    lastChangedAt: row.lastChangedAt ? row.lastChangedAt.toISOString() : null,
+  };
+}

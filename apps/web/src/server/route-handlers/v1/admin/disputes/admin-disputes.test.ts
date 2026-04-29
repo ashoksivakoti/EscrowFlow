@@ -125,6 +125,7 @@ describe("admin disputes handlers", () => {
           clientAmountWei: "400000",
           note: "Split based on delivered scope",
         },
+        emergencyResolutionProposal: null,
         recentTransactions: [],
       },
     });

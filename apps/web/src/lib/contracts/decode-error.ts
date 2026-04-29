@@ -37,6 +37,8 @@ const CUSTOM_ERROR_MESSAGES: Record<string, string> = {
     "Project cancellation is blocked because a submitted milestone is still in review.",
   CannotCancelApprovedMilestone:
     "Approved milestones cannot be cancelled.",
+  ProjectNotActive:
+    "Project is not active for this operation.",
   InvalidMilestoneStatus:
     "Milestone status does not allow this action.",
   InvalidDisputeMilestoneStatus:
@@ -57,6 +59,14 @@ const CUSTOM_ERROR_MESSAGES: Record<string, string> = {
     "Emergency resolution has not been proposed.",
   TokenReviewNotAttested:
     "Token review is not attested for this operation.",
+  InvalidToken:
+    "Token address is invalid for allowlist review.",
+  ZeroAddress:
+    "Zero address is not allowed for this operation.",
+  RoleSeparationViolation:
+    "Role separation violation: admin/pauser cannot also be arbitrator.",
+  InvalidArbitratorThreshold:
+    "Invalid arbitrator threshold for current arbitrator set.",
   InvalidSignature:
     "Signature verification failed.",
   SignatureExpired:

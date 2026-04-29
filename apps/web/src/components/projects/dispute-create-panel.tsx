@@ -12,6 +12,8 @@ import { Button } from "@/components/ui/button";
 import { FieldError } from "@/components/ui/field-error";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { SyncStatusNotice } from "@/components/sync/sync-status-notice";
+import { useSyncReconciliation } from "@/hooks/use-sync-reconciliation";
 
 export function DisputeCreatePanel(props: {
   projectId: string;
@@ -41,6 +43,8 @@ export function DisputeCreatePanel(props: {
   const [phase, setPhase] = useState<"idle" | "signing" | "pending" | "reconciling">("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [stateMismatchMessage, setStateMismatchMessage] = useState<string | null>(null);
+  const syncTracker = useSyncReconciliation(true);
 
   const chainMismatch = activeChainId !== props.chainId;
   const isParticipant = useMemo(() => {
@@ -125,6 +129,41 @@ export function DisputeCreatePanel(props: {
 
     setSubmitting(true);
     try {
+      const [projectTuple, milestoneTuple, disputeTuple, paused] = await Promise.all([
+        publicClient.readContract({
+          address: props.escrowContractAddress,
+          abi: escrowRegistryAbi,
+          functionName: "getProject",
+          args: [BigInt(props.onChainProjectId)],
+        }),
+        publicClient.readContract({
+          address: props.escrowContractAddress,
+          abi: escrowRegistryAbi,
+          functionName: "getMilestone",
+          args: [BigInt(props.onChainProjectId), BigInt(props.milestoneIndex)],
+        }),
+        publicClient.readContract({
+          address: props.escrowContractAddress,
+          abi: escrowRegistryAbi,
+          functionName: "getDispute",
+          args: [BigInt(props.onChainProjectId), BigInt(props.milestoneIndex)],
+        }),
+        publicClient.readContract({
+          address: props.escrowContractAddress,
+          abi: escrowRegistryAbi,
+          functionName: "paused",
+        }),
+      ]);
+      const projectStatus = Number(projectTuple.status);
+      const milestoneStatus = Number(milestoneTuple.status);
+      const disputeActive = Boolean(disputeTuple[0]);
+      if (Boolean(paused) || (projectStatus !== 0 && projectStatus !== 1) || (milestoneStatus !== 1 && milestoneStatus !== 2) || disputeActive) {
+        setStateMismatchMessage(
+          "On-chain dispute preconditions changed. Refresh project state and try again.",
+        );
+        setErrorMessage("Dispute preflight failed due to chain/db mismatch.");
+        return;
+      }
       const normalizedReason = reason.trim();
       const disputeReasonUri = reasonUri(normalizedReason);
       setPhase("signing");
@@ -142,6 +181,8 @@ export function DisputeCreatePanel(props: {
       });
       setPhase("pending");
       await publicClient.waitForTransactionReceipt({ hash: disputeTxHash });
+      const receipt = await publicClient.getTransactionReceipt({ hash: disputeTxHash });
+      syncTracker.onTxConfirmed(receipt.blockNumber);
 
       const encodedFiles = await Promise.all(
         files.map(async (file) => ({
@@ -186,6 +227,7 @@ export function DisputeCreatePanel(props: {
       await queryClient.invalidateQueries({ queryKey: ["project", props.projectId] });
       await queryClient.invalidateQueries({ queryKey: ["projects"] });
       await queryClient.invalidateQueries({ queryKey: ["admin-disputes"] });
+      syncTracker.markUiRefreshed();
     } catch (error) {
       setErrorMessage(formatEscrowRegistryWriteError(error, "Could not raise dispute"));
     } finally {
@@ -221,6 +263,11 @@ export function DisputeCreatePanel(props: {
       {guardError() ? (
         <div className="mt-2 rounded-lg border border-amber-300/35 bg-amber-300/10 p-2 text-xs text-amber-100">
           {guardError()}
+        </div>
+      ) : null}
+      {stateMismatchMessage ? (
+        <div className="mt-2 rounded-lg border border-amber-300/35 bg-amber-300/10 p-2 text-xs text-amber-100">
+          {stateMismatchMessage}
         </div>
       ) : null}
 
@@ -276,6 +323,15 @@ export function DisputeCreatePanel(props: {
             {successMessage}
           </div>
         ) : null}
+        <SyncStatusNotice
+          stage={syncTracker.stage}
+          syncStatus={syncTracker.syncStatus}
+          syncStatusError={syncTracker.syncStatusError}
+          onRefresh={() => {
+            void queryClient.invalidateQueries({ queryKey: ["project", props.projectId] });
+            void syncTracker.refetchSyncStatus();
+          }}
+        />
 
         <FieldError message={errorMessage ?? undefined} className="text-xs" />
         {submitting ? (

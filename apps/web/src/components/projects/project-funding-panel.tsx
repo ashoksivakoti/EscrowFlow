@@ -18,6 +18,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { FieldError } from "@/components/ui/field-error";
 import { Input } from "@/components/ui/input";
+import { SyncStatusNotice } from "@/components/sync/sync-status-notice";
+import { useSyncReconciliation } from "@/hooks/use-sync-reconciliation";
 
 type FundingPanelProps = {
   projectId: string;
@@ -46,6 +48,7 @@ type OnChainFundingState = {
   allowanceWei: bigint;
   balanceWei: bigint;
   projectStatusCode: number;
+  tokenAllowed: boolean;
 };
 
 function clampPositiveDecimal(input: string): string {
@@ -90,6 +93,8 @@ export function ProjectFundingPanel(props: FundingPanelProps) {
   const [amountInput, setAmountInput] = useState("");
   const [onChain, setOnChain] = useState<OnChainFundingState | null>(null);
   const [onChainReadError, setOnChainReadError] = useState<string | null>(null);
+  const [stateMismatchMessage, setStateMismatchMessage] = useState<string | null>(null);
+  const syncTracker = useSyncReconciliation(Boolean(address));
 
   const chainMismatch = chainId !== props.chainId;
   const onChainProjectId = BigInt(props.onChainProjectId);
@@ -101,7 +106,7 @@ export function ProjectFundingPanel(props: FundingPanelProps) {
       return;
     }
     try {
-      const [projectTuple, decimals, allowance, balance] = await Promise.all([
+      const [projectTuple, decimals, allowance, balance, allowedToken] = await Promise.all([
         publicClient.readContract({
           address: props.escrowContractAddress,
           abi: escrowRegistryAbi,
@@ -125,6 +130,12 @@ export function ProjectFundingPanel(props: FundingPanelProps) {
           functionName: "balanceOf",
           args: [address],
         }),
+        publicClient.readContract({
+          address: props.escrowContractAddress,
+          abi: escrowRegistryAbi,
+          functionName: "isAllowedToken",
+          args: [props.tokenAddress],
+        }),
       ]);
 
       const totalWei = BigInt(projectTuple.totalAmount);
@@ -137,8 +148,10 @@ export function ProjectFundingPanel(props: FundingPanelProps) {
         allowanceWei: BigInt(allowance),
         balanceWei: BigInt(balance),
         projectStatusCode: Number(projectTuple.status),
+        tokenAllowed: Boolean(allowedToken),
       });
       setOnChainReadError(null);
+      setStateMismatchMessage(null);
     } catch (error) {
       setOnChain(null);
       setOnChainReadError(formatReadContractError(error));
@@ -224,6 +237,10 @@ export function ProjectFundingPanel(props: FundingPanelProps) {
       setErrorMessage("Your token balance is lower than this funding amount.");
       return;
     }
+    if (!onChain.tokenAllowed) {
+      setErrorMessage("Token is not allowlisted on-chain. Refresh project token settings.");
+      return;
+    }
     // Contract enum: 0 = Active, 1 = Disputed, 2 = Completed, 3 = Cancelled.
     if (onChain.projectStatusCode !== 0) {
       const mapped = ["Active", "Disputed", "Completed", "Cancelled"][onChain.projectStatusCode];
@@ -233,6 +250,34 @@ export function ProjectFundingPanel(props: FundingPanelProps) {
 
     try {
       const account = walletClient.account.address;
+      const [liveProjectTuple, livePaused, liveAllowedToken] = await Promise.all([
+        publicClient.readContract({
+          address: props.escrowContractAddress,
+          abi: escrowRegistryAbi,
+          functionName: "getProject",
+          args: [onChainProjectId],
+        }),
+        publicClient.readContract({
+          address: props.escrowContractAddress,
+          abi: escrowRegistryAbi,
+          functionName: "paused",
+        }),
+        publicClient.readContract({
+          address: props.escrowContractAddress,
+          abi: escrowRegistryAbi,
+          functionName: "isAllowedToken",
+          args: [props.tokenAddress],
+        }),
+      ]);
+      const liveStatusCode = Number(liveProjectTuple.status);
+      if (Boolean(livePaused) || !Boolean(liveAllowedToken) || liveStatusCode !== 0) {
+        setStateMismatchMessage(
+          "On-chain state changed since the last sync. Refresh project data and retry funding.",
+        );
+        setErrorMessage("Funding preflight failed due to chain/db mismatch.");
+        await refreshOnChainState();
+        return;
+      }
 
       if (!derived.allowanceEnough) {
         setPhase("approve_signing");
@@ -280,6 +325,8 @@ export function ProjectFundingPanel(props: FundingPanelProps) {
       });
       setPhase("fund_pending");
       await publicClient.waitForTransactionReceipt({ hash: fundHash });
+      const fundReceipt = await publicClient.getTransactionReceipt({ hash: fundHash });
+      syncTracker.onTxConfirmed(fundReceipt.blockNumber);
       const fundedSnapshot = await publicClient.readContract({
         address: props.escrowContractAddress,
         abi: escrowRegistryAbi,
@@ -306,6 +353,7 @@ export function ProjectFundingPanel(props: FundingPanelProps) {
 
       await queryClient.invalidateQueries({ queryKey: ["project", props.projectId] });
       await queryClient.invalidateQueries({ queryKey: ["projects"] });
+      syncTracker.markUiRefreshed();
       setPhase("fund_success");
       setSuccessMessage("Funding confirmed on-chain and synced in app state.");
       setAmountInput("");
@@ -395,6 +443,20 @@ export function ProjectFundingPanel(props: FundingPanelProps) {
             <p className="mt-2 whitespace-pre-wrap break-words text-xs">{onChainReadError}</p>
           </div>
         ) : null}
+        {stateMismatchMessage ? (
+          <div className="rounded-xl border border-amber-300/35 bg-amber-300/10 px-4 py-3 text-sm text-amber-100">
+            {stateMismatchMessage}
+          </div>
+        ) : null}
+        <SyncStatusNotice
+          stage={syncTracker.stage}
+          syncStatus={syncTracker.syncStatus}
+          syncStatusError={syncTracker.syncStatusError}
+          onRefresh={() => {
+            void refreshOnChainState();
+            void syncTracker.refetchSyncStatus();
+          }}
+        />
 
         <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <InfoMetric
@@ -437,6 +499,18 @@ export function ProjectFundingPanel(props: FundingPanelProps) {
               onChain
                 ? (["Active", "Disputed", "Completed", "Cancelled"][onChain.projectStatusCode] ??
                   `Unknown (${onChain.projectStatusCode})`)
+                : onChainReadError
+                  ? "—"
+                  : "Loading…"
+            }
+          />
+          <InfoMetric
+            label="Token allowlisted"
+            value={
+              onChain
+                ? onChain.tokenAllowed
+                  ? "Yes"
+                  : "No"
                 : onChainReadError
                   ? "—"
                   : "Loading…"

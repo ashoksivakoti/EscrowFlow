@@ -1,4 +1,8 @@
-import { MilestoneStatus, ProjectStatus } from "@prisma/client";
+import {
+  MilestoneStatus,
+  ProjectStatus,
+  TransactionLogSourceType,
+} from "@prisma/client";
 
 import type { ReconcileFundingBody } from "@/server/validation/schemas/funding";
 import { prisma, prismaInteractiveTransactionOptions } from "@/lib/prisma";
@@ -114,6 +118,7 @@ export async function reconcileProjectFunding(
           },
         },
         update: {
+          sourceType: TransactionLogSourceType.synthetic_client_reconcile,
           payload: {
             projectId,
             fundedAmountWei: payload.fundedAmountWei,
@@ -126,6 +131,7 @@ export async function reconcileProjectFunding(
           txHash: payload.txHash.toLowerCase(),
           logIndex: -1,
           eventName: "ProjectFunded",
+          sourceType: TransactionLogSourceType.synthetic_client_reconcile,
           projectId,
           initiatedByUserId: userId,
           fromAddress: null,

@@ -35,6 +35,7 @@ const schema = z.object({
   EVENT_SYNC_CONFIRMATIONS: z.coerce.number().int().nonnegative().default(2),
   EVENT_SYNC_RPC_RETRIES: z.coerce.number().int().min(0).max(5).default(2),
   EVENT_SYNC_RPC_RETRY_DELAY_MS: z.coerce.number().int().min(100).max(10_000).default(800),
+  EVENT_SYNC_REWIND_DEPTH: z.coerce.number().int().min(1).max(10_000).default(50),
   EVENT_SYNC_TRIGGER_TOKEN: z.string().min(16).optional(),
 }).superRefine((data, ctx) => {
   const canonicalScope = `ESCROW_REGISTRY:${data.EVENT_SYNC_CONTRACT_ADDRESS}`;
@@ -121,6 +122,7 @@ export function getEventSyncEnv(): EventSyncEnv {
     EVENT_SYNC_CONFIRMATIONS: process.env.EVENT_SYNC_CONFIRMATIONS,
     EVENT_SYNC_RPC_RETRIES: process.env.EVENT_SYNC_RPC_RETRIES,
     EVENT_SYNC_RPC_RETRY_DELAY_MS: process.env.EVENT_SYNC_RPC_RETRY_DELAY_MS,
+    EVENT_SYNC_REWIND_DEPTH: process.env.EVENT_SYNC_REWIND_DEPTH,
     EVENT_SYNC_TRIGGER_TOKEN: process.env.EVENT_SYNC_TRIGGER_TOKEN,
   });
   return cached;

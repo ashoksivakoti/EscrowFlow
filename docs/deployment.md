@@ -25,7 +25,7 @@ Then set at minimum:
 - `DATABASE_URL` (root + `apps/web`)
 - `AUTH_SECRET`, `AUTH_SIWE_DOMAIN`, `AUTH_SIWE_URI`, `AUTH_ALLOWED_CHAIN_IDS`
 - `NEXT_PUBLIC_CHAIN_IDS`, `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID`
-- `EVENT_SYNC_RPC_URL`, `EVENT_SYNC_CHAIN_ID`, `EVENT_SYNC_CONTRACT_ADDRESS`
+- `EVENT_SYNC_RPC_URL`, `EVENT_SYNC_CHAIN_ID`, `EVENT_SYNC_CONTRACT_ADDRESS`, `EVENT_SYNC_SCOPE`, `EVENT_SYNC_START_BLOCK`
 - `EVENT_SYNC_TRIGGER_TOKEN` (required in production)
 - `IPFS_PINATA_JWT`
 
@@ -35,6 +35,12 @@ Validate before build:
 pnpm web:validate:env
 pnpm web:sanity:contract
 ```
+
+Canonical event-sync scope format:
+
+- `EVENT_SYNC_SCOPE=ESCROW_REGISTRY:<lowercase_contract_address>`
+- Canonical value for current production registry:
+  - `EVENT_SYNC_SCOPE=ESCROW_REGISTRY:0xe5af7e2cf6435de6b0a0520518fcaaab851bb40c`
 
 ## 3) Database migration flow (production)
 
@@ -120,6 +126,7 @@ Variables:
 - `EVENT_SYNC_TRIGGER_TOKEN`
 - `EVENT_SYNC_TRIGGER_RETRIES`
 - `EVENT_SYNC_TRIGGER_RETRY_DELAY_MS`
+- `EVENT_SYNC_REWIND_DEPTH` (default `50`)
 
 This is suitable for:
 

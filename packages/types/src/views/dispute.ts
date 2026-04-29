@@ -71,5 +71,16 @@ export type AdminDisputeDetail = DisputeDetail & {
     clientAmountWei: string | null;
     note: string | null;
   } | null;
+  emergencyResolutionProposal: {
+    status: "proposed" | "cancelled" | "executed" | "invalidated";
+    actionHash: string | null;
+    kind: number | null;
+    freelancerAmountWei: string | null;
+    clientAmountWei: string | null;
+    readyAt: IsoDateTimeString | null;
+    txHash: TxHash;
+    logIndex: number;
+    updatedAt: IsoDateTimeString;
+  } | null;
   recentTransactions: ProjectTransactionHistoryItem[];
 };

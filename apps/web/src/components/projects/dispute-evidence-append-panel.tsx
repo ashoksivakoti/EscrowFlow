@@ -9,6 +9,8 @@ import { FieldError } from "@/components/ui/field-error";
 import { Input } from "@/components/ui/input";
 import { escrowRegistryAbi } from "@/lib/contracts/escrow-registry-abi.full";
 import { formatEscrowRegistryWriteError } from "@/lib/contracts/decode-error";
+import { SyncStatusNotice } from "@/components/sync/sync-status-notice";
+import { useSyncReconciliation } from "@/hooks/use-sync-reconciliation";
 
 const MAX_EVIDENCE_URI_BYTES = 2048;
 
@@ -32,6 +34,8 @@ export function DisputeEvidenceAppendPanel(props: {
   const [phase, setPhase] = useState<"idle" | "signing" | "pending" | "success" | "failure">("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [stateMismatchMessage, setStateMismatchMessage] = useState<string | null>(null);
+  const syncTracker = useSyncReconciliation(true);
 
   const chainMismatch = activeChainId !== props.chainId;
   const isParticipant = useMemo(() => {
@@ -87,6 +91,26 @@ export function DisputeEvidenceAppendPanel(props: {
     }
 
     try {
+      const [disputeTuple, paused] = await Promise.all([
+        publicClient.readContract({
+          address: props.escrowContractAddress,
+          abi: escrowRegistryAbi,
+          functionName: "getDispute",
+          args: [BigInt(props.onChainProjectId), BigInt(props.milestoneIndex)],
+        }),
+        publicClient.readContract({
+          address: props.escrowContractAddress,
+          abi: escrowRegistryAbi,
+          functionName: "paused",
+        }),
+      ]);
+      if (Boolean(paused) || !Boolean(disputeTuple[0])) {
+        setStateMismatchMessage(
+          "On-chain dispute state changed. Refresh project data before appending evidence.",
+        );
+        setErrorMessage("Evidence append preflight failed due to chain/db mismatch.");
+        return;
+      }
       setPhase("signing");
       const hash = await walletClient.writeContract({
         address: props.escrowContractAddress,
@@ -98,9 +122,12 @@ export function DisputeEvidenceAppendPanel(props: {
       });
       setPhase("pending");
       await publicClient.waitForTransactionReceipt({ hash });
+      const receipt = await publicClient.getTransactionReceipt({ hash });
+      syncTracker.onTxConfirmed(receipt.blockNumber);
       await queryClient.invalidateQueries({ queryKey: ["project", props.projectId] });
       await queryClient.invalidateQueries({ queryKey: ["projects"] });
       await queryClient.invalidateQueries({ queryKey: ["admin-disputes"] });
+      syncTracker.markUiRefreshed();
       setPhase("success");
       setSuccessMessage("Evidence appended on-chain successfully.");
       setEvidenceUri("");
@@ -145,6 +172,18 @@ export function DisputeEvidenceAppendPanel(props: {
       {phase === "pending" ? (
         <p className="mt-2 text-xs text-zinc-300">Transaction submitted. Waiting confirmation...</p>
       ) : null}
+      {stateMismatchMessage ? (
+        <p className="mt-2 text-xs text-amber-200">{stateMismatchMessage}</p>
+      ) : null}
+      <SyncStatusNotice
+        stage={syncTracker.stage}
+        syncStatus={syncTracker.syncStatus}
+        syncStatusError={syncTracker.syncStatusError}
+        onRefresh={() => {
+          void queryClient.invalidateQueries({ queryKey: ["project", props.projectId] });
+          void syncTracker.refetchSyncStatus();
+        }}
+      />
       {successMessage ? <p className="mt-2 text-xs text-emerald-300">{successMessage}</p> : null}
       <FieldError message={errorMessage ?? undefined} className="mt-2 text-xs" />
       <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:justify-end">

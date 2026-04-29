@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { FieldError } from "@/components/ui/field-error";
 import { escrowRegistryAbi } from "@/lib/contracts/escrow-registry-abi.full";
 import { formatEscrowRegistryWriteError } from "@/lib/contracts/decode-error";
+import { SyncStatusNotice } from "@/components/sync/sync-status-notice";
+import { useSyncReconciliation } from "@/hooks/use-sync-reconciliation";
 
 type MilestonePreflight = {
   index: number;
@@ -59,6 +61,7 @@ export function CancelProjectPanel(props: {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+  const syncTracker = useSyncReconciliation(true);
 
   const isClientWallet = useMemo(() => {
     return address
@@ -356,12 +359,15 @@ export function CancelProjectPanel(props: {
                     });
                     setPhase("signing");
                     await publicClient.waitForTransactionReceipt({ hash });
+                    const receipt = await publicClient.getTransactionReceipt({ hash });
+                    syncTracker.onTxConfirmed(receipt.blockNumber);
 
                     await queryClient.invalidateQueries({
                       queryKey: ["project", props.projectId],
                     });
                     await queryClient.invalidateQueries({ queryKey: ["projects"] });
                     await queryClient.invalidateQueries({ queryKey: ["admin-disputes"] });
+                    syncTracker.markUiRefreshed();
 
                     setPhase("success");
                     setSuccessMessage("Project canceled on-chain and synced in app state.");
@@ -382,6 +388,18 @@ export function CancelProjectPanel(props: {
             {successMessage ? (
               <p className="mt-3 text-xs text-emerald-300">{successMessage}</p>
             ) : null}
+            <div className="mt-3">
+              <SyncStatusNotice
+                stage={syncTracker.stage}
+                syncStatus={syncTracker.syncStatus}
+                syncStatusError={syncTracker.syncStatusError}
+                onRefresh={() => {
+                  void refreshPreflight();
+                  void queryClient.invalidateQueries({ queryKey: ["project", props.projectId] });
+                  void syncTracker.refetchSyncStatus();
+                }}
+              />
+            </div>
           </div>
         </div>
       ) : null}

@@ -42,6 +42,7 @@ export type ProjectTransactionHistoryItem = {
   blockNumber: string;
   logIndex: number;
   eventName: string;
+  sourceType?: "chain_event" | "synthetic_client_reconcile" | "backend_metadata";
   fromAddress: WalletAddress | null;
   toAddress: WalletAddress | null;
   amountWei?: WeiAmount | null;

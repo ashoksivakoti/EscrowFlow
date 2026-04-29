@@ -15,6 +15,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { FieldError } from "@/components/ui/field-error";
 import { Textarea } from "@/components/ui/textarea";
+import { SyncStatusNotice } from "@/components/sync/sync-status-notice";
+import { useSyncReconciliation } from "@/hooks/use-sync-reconciliation";
 
 type ReviewPhase =
   | "idle"
@@ -50,6 +52,8 @@ export function MilestoneApprovalPanel(props: {
   const [phase, setPhase] = useState<ReviewPhase>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [stateMismatchMessage, setStateMismatchMessage] = useState<string | null>(null);
+  const syncTracker = useSyncReconciliation(true);
 
   const chainMismatch = activeChainId !== props.chainId;
   const approveGuard = canApproveMilestone({
@@ -100,6 +104,41 @@ export function MilestoneApprovalPanel(props: {
       const account = walletClient.account.address;
       const approveArgs = [BigInt(props.onChainProjectId), BigInt(props.milestoneIndex)] as const;
       const releaseArgs = [BigInt(props.onChainProjectId), BigInt(props.milestoneIndex)] as const;
+      const [projectTuple, milestoneTuple, disputeTuple, paused] = await Promise.all([
+        publicClient.readContract({
+          address: props.escrowContractAddress,
+          abi: escrowRegistryAbi,
+          functionName: "getProject",
+          args: [BigInt(props.onChainProjectId)],
+        }),
+        publicClient.readContract({
+          address: props.escrowContractAddress,
+          abi: escrowRegistryAbi,
+          functionName: "getMilestone",
+          args: [BigInt(props.onChainProjectId), BigInt(props.milestoneIndex)],
+        }),
+        publicClient.readContract({
+          address: props.escrowContractAddress,
+          abi: escrowRegistryAbi,
+          functionName: "getDispute",
+          args: [BigInt(props.onChainProjectId), BigInt(props.milestoneIndex)],
+        }),
+        publicClient.readContract({
+          address: props.escrowContractAddress,
+          abi: escrowRegistryAbi,
+          functionName: "paused",
+        }),
+      ]);
+      const projectStatus = Number(projectTuple.status);
+      const milestoneStatus = Number(milestoneTuple.status);
+      const disputeActive = Boolean(disputeTuple[0]);
+      if (Boolean(paused) || projectStatus !== 0 || milestoneStatus !== 1 || disputeActive) {
+        setStateMismatchMessage(
+          "On-chain milestone state changed. Refresh the project and retry approval.",
+        );
+        setErrorMessage("Approval preflight failed due to chain/db mismatch.");
+        return;
+      }
 
       setPhase("approve_signing");
       const approveGas = await estimateCappedWriteGas({
@@ -123,6 +162,19 @@ export function MilestoneApprovalPanel(props: {
       setPhase("approve_pending");
       await publicClient.waitForTransactionReceipt({ hash: approveTxHash });
       setPhase("approve_success");
+      const postApproveMilestone = await publicClient.readContract({
+        address: props.escrowContractAddress,
+        abi: escrowRegistryAbi,
+        functionName: "getMilestone",
+        args: [BigInt(props.onChainProjectId), BigInt(props.milestoneIndex)],
+      });
+      if (Number(postApproveMilestone.status) !== 2) {
+        setStateMismatchMessage(
+          "Milestone status is not Approved on-chain after approval tx. Refresh and retry.",
+        );
+        setErrorMessage("Release preflight failed due to chain/db mismatch.");
+        return;
+      }
 
       setPhase("release_signing");
       const releaseGas = await estimateCappedWriteGas({
@@ -145,6 +197,8 @@ export function MilestoneApprovalPanel(props: {
 
       setPhase("release_pending");
       await publicClient.waitForTransactionReceipt({ hash: releaseTxHash });
+      const releaseReceipt = await publicClient.getTransactionReceipt({ hash: releaseTxHash });
+      syncTracker.onTxConfirmed(releaseReceipt.blockNumber);
 
       const reconcileRes = await fetch(
         `/api/v1/projects/${props.projectId}/milestones/${props.milestoneId}/approve-payout`,
@@ -171,6 +225,7 @@ export function MilestoneApprovalPanel(props: {
 
       await queryClient.invalidateQueries({ queryKey: ["project", props.projectId] });
       await queryClient.invalidateQueries({ queryKey: ["projects"] });
+      syncTracker.markUiRefreshed();
 
       setPhase("success");
       setSuccessMessage("Milestone approved and payout released successfully.");
@@ -248,6 +303,22 @@ export function MilestoneApprovalPanel(props: {
           {guardReasonMessage(actionBlockedReason)}
         </div>
       ) : null}
+      {stateMismatchMessage ? (
+        <div className="mt-3 rounded-xl border border-amber-300/35 bg-amber-300/10 px-3 py-2 text-xs text-amber-100">
+          {stateMismatchMessage}
+        </div>
+      ) : null}
+      <div className="mt-3">
+        <SyncStatusNotice
+          stage={syncTracker.stage}
+          syncStatus={syncTracker.syncStatus}
+          syncStatusError={syncTracker.syncStatusError}
+          onRefresh={() => {
+            void queryClient.invalidateQueries({ queryKey: ["project", props.projectId] });
+            void syncTracker.refetchSyncStatus();
+          }}
+        />
+      </div>
 
       {statusMessage ? (
         <div

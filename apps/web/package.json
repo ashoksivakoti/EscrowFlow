@@ -11,7 +11,9 @@
     "test": "vitest run",
     "validate:env": "node ./scripts/validate-env.mjs",
     "sanity:contract": "node ./scripts/sanity-check-contract-integration.mjs",
-    "event-sync:trigger": "node ./scripts/trigger-event-sync.mjs"
+    "sanity:full-sync": "node ./scripts/sanity-check-full-sync.mjs",
+    "event-sync:trigger": "node ./scripts/trigger-event-sync.mjs",
+    "e2e": "playwright test"
   },
   "dependencies": {
     "@escrowflow/types": "workspace:*",
@@ -35,6 +37,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@playwright/test": "^1.55.0",
     "@eslint/eslintrc": "^3.2.0",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",

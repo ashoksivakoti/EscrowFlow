@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { fireEvent, screen } from "@testing-library/react";
 import { createElement, type ReactNode } from "react";
 
 import MilestoneSubmissionPage from "@/app/projects/[projectId]/milestones/[milestoneId]/submit/page";
+import { renderWithProviders } from "@/test/render-with-providers";
 
 const replaceMock = vi.fn();
 const pushMock = vi.fn();
@@ -46,29 +46,51 @@ vi.mock("@/hooks/use-project-detail-query", () => ({
     data: {
       id: "project_1",
       title: "Project One",
+      status: "ACTIVE",
       freelancer: { id: "freelancer_1" },
       chainId: null,
       onChainProjectId: null,
       escrowContractAddress: null,
       milestones: [
-        { id: "milestone_1", title: "Milestone A", status: "FUNDED", sortOrder: 0 },
+        {
+          id: "milestone_1",
+          title: "Milestone A",
+          status: "FUNDED",
+          sortOrder: 0,
+          openDisputeId: null,
+        },
       ],
     },
     isPending: false,
   }),
 }));
 
-vi.mock("wagmi", () => ({
-  useChainId: () => 1,
-  usePublicClient: () => null,
-  useSwitchChain: () => ({ switchChainAsync: vi.fn() }),
-  useWalletClient: () => ({ data: null }),
-}));
+vi.mock("wagmi", async () => {
+  const actual = await vi.importActual<typeof import("wagmi")>("wagmi");
+  return {
+    ...actual,
+    usePublicClient: () => null,
+    useWalletClient: () => ({ data: null }),
+    useSwitchChain: () => ({ switchChainAsync: vi.fn() }),
+  };
+});
 
-function renderWithQueryClient(node: ReactNode) {
-  const queryClient = new QueryClient();
-  return render(createElement(QueryClientProvider, { client: queryClient }, node));
-}
+vi.mock("@/lib/contracts/roles", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/contracts/roles")>(
+    "@/lib/contracts/roles",
+  );
+  return {
+    ...actual,
+    useContractRoles: () => ({
+      isContractAdmin: false,
+      isPauser: false,
+      isArbitrator: false,
+      isLoading: false,
+      error: null,
+      warnings: [],
+    }),
+  };
+});
 
 describe("MilestoneSubmissionPage", () => {
   beforeEach(() => {
@@ -81,7 +103,7 @@ describe("MilestoneSubmissionPage", () => {
   });
 
   it("shows an error if submit is clicked without files", async () => {
-    renderWithQueryClient(createElement(MilestoneSubmissionPage));
+    renderWithProviders(createElement(MilestoneSubmissionPage), { includePauseProvider: true });
     fireEvent.click(screen.getByRole("button", { name: "Submit milestone work" }));
     expect(
       await screen.findByText("Please select at least one deliverable file."),
