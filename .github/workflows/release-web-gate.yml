@@ -50,8 +50,8 @@ jobs:
       - name: Validate env + contract sanity + web build
         run: pnpm ci:release:web
 
-      - name: Browser E2E convergence (optional when secrets configured)
-        if: ${{ secrets.E2E_INTERNAL_TOKEN != '' && secrets.E2E_ADMIN_PRIVATE_KEY != '' }}
+      - name: Browser E2E convergence (optional when env is configured)
+        if: ${{ env.E2E_INTERNAL_TOKEN != '' && env.E2E_ADMIN_PRIVATE_KEY != '' }}
         run: |
           pnpm --filter @escrowflow/web exec playwright install --with-deps chromium
           pnpm --filter @escrowflow/web e2e
