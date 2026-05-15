@@ -19,7 +19,7 @@ export function Footer() {
             Built by:
           </span>
           <Link
-            href="https://github.com/your-handle"
+            href="https://github.com/ashoksivakoti"
             target="_blank"
             rel="noreferrer"
             className="font-medium text-zinc-300 transition-colors hover:text-cyan-300"
@@ -27,7 +27,7 @@ export function Footer() {
             Ashok Sivakoti
           </Link>
           <Link
-            href="https://github.com/your-handle"
+            href="https://github.com/ashoksivakoti"
             target="_blank"
             rel="noreferrer"
             aria-label="GitHub"
@@ -37,7 +37,7 @@ export function Footer() {
             <span className="sr-only sm:not-sr-only">GitHub</span>
           </Link>
           <Link
-            href="https://linkedin.com/in/your-handle"
+            href="https://www.linkedin.com/in/ashok-kumar-93b5b115a/"
             target="_blank"
             rel="noreferrer"
             aria-label="LinkedIn"
